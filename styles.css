@@ -168,6 +168,11 @@ section.reel::after {
   100% { opacity: 1; }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .reel-title-bottom .letter { animation: none; }
+  .center-card { transition: none; }
+}
+
 .scroll-hint {
   position: fixed;
   bottom: 3vh;

@@ -1,6 +1,7 @@
 (function () {
   const TYPE_START_DELAY_MS = 400;
   const HOLD_MS = 20000;
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   const sections = Array.from(document.querySelectorAll('section.reel'));
   const state = new WeakMap();
@@ -66,6 +67,11 @@
       card.classList.add('visible');
     });
 
+    if (reducedMotion) {
+      typedEl.textContent = fullText;
+      return;
+    }
+
     let i = 0;
     function typeChar() {
       if (!s.active) return;
@@ -87,8 +93,20 @@
     s.typeTimeout = setTimeout(typeChar, TYPE_START_DELAY_MS);
   }
 
+  const visibleVideos = new Set();
   const observer = new IntersectionObserver((entries) => {
     entries.forEach((entry) => {
+      const video = entry.target.querySelector('video');
+      if (video) {
+        if (entry.isIntersecting) {
+          visibleVideos.add(video);
+          video.play().catch(() => {});
+        } else {
+          visibleVideos.delete(video);
+          video.pause();
+        }
+      }
+
       if (entry.isIntersecting && entry.intersectionRatio >= 0.95) {
         startSection(entry.target);
         setActiveNote(entry.target.dataset.note);
@@ -116,7 +134,7 @@
   });
 
   setInterval(() => {
-    if (!flickerEls.length) return;
+    if (reducedMotion || !flickerEls.length) return;
     const el = flickerEls[Math.floor(Math.random() * flickerEls.length)];
     const letters = el.querySelectorAll('.letter');
     if (!letters.length) return;
@@ -151,8 +169,10 @@
       });
     });
   }
-  window.addEventListener('scroll', onScrollParallax, { passive: true });
-  onScrollParallax();
+  if (!reducedMotion) {
+    window.addEventListener('scroll', onScrollParallax, { passive: true });
+    onScrollParallax();
+  }
 
   // --- Field notes tab toggle ---
   const notesHandle = document.getElementById('notesHandle');
@@ -184,7 +204,7 @@
     'click',
     (e) => {
       if (e.target === soundToggle || soundToggle.contains(e.target)) return;
-      document.querySelectorAll('video').forEach((v) => v.play().catch(() => {}));
+      visibleVideos.forEach((v) => v.play().catch(() => {}));
     },
     { once: true }
   );
