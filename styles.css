@@ -169,7 +169,6 @@ section.reel::after {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .reel-title-bottom .letter { animation: none; }
   .center-card { transition: none; }
 }
 

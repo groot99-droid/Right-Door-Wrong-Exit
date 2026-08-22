@@ -134,7 +134,7 @@
   });
 
   setInterval(() => {
-    if (reducedMotion || !flickerEls.length) return;
+    if (!flickerEls.length) return;
     const el = flickerEls[Math.floor(Math.random() * flickerEls.length)];
     const letters = el.querySelectorAll('.letter');
     if (!letters.length) return;
@@ -169,10 +169,8 @@
       });
     });
   }
-  if (!reducedMotion) {
-    window.addEventListener('scroll', onScrollParallax, { passive: true });
-    onScrollParallax();
-  }
+  window.addEventListener('scroll', onScrollParallax, { passive: true });
+  onScrollParallax();
 
   // --- Field notes tab toggle ---
   const notesHandle = document.getElementById('notesHandle');
