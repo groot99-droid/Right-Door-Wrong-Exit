@@ -67,7 +67,12 @@ Then open `http://localhost:8080/index.html`.
 - Each section owns one audio track. `0.mp3` runs under the home screen; a room's track starts
   with its loading clip and keeps playing through the glitch and the room itself, so the four
   seconds of loading and the room that follows are one continuous piece of sound.
-- The video clips keep their own audio underneath, at 20% volume (`VIDEO_VOLUME` in `script.js`).
+- The video clips keep their own audio underneath, at 8% volume (`VIDEO_VOLUME` in `script.js`) —
+  quiet enough to sit below the section track rather than compete with it.
+- Starting an unmuted `<video>` hands it the audio session on mobile browsers, which pauses a
+  playing `<audio>`. Since the section track is meant to run over both the loading clip and the
+  room, it reclaims playback whenever something else stops it (capped, and the sound toggle
+  always wins).
 - Browsers block audible playback until the visitor interacts with the page, so the site opens
   on a `CLICK ANYWHERE TO BEGIN` veil over the darkened title card. That one click (or keypress)
   is what lets `0.mp3` start; the veil then fades and leaves you on the home screen with START

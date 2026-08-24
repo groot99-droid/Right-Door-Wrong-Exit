@@ -101,7 +101,7 @@
   ];
 
   const HOME_AUDIO = '0.mp3';  // plays on the title card
-  const VIDEO_VOLUME = 0.2;    // the clips' own sound, kept under the section track
+  const VIDEO_VOLUME = 0.08;   // the clips' own sound, kept well under the section track
 
   const LOAD_MS = 4000;        // loading screen duration before the glitch
   const GLITCH_MS = 900;       // total glitch length
@@ -170,6 +170,19 @@
     // Browsers block audible playback until the visitor has interacted.
     sectionAudio.play().catch(armGesture);
   }
+
+  // Starting an unmuted <video> hands it the audio session on mobile, which
+  // pauses the section track mid-room. The track is meant to run over both the
+  // loading clip and the room, so take it back whenever something else stops it.
+  let reclaims = 0;
+  sectionAudio.addEventListener('playing', () => { reclaims = 0; });
+  sectionAudio.addEventListener('pause', () => {
+    if (!soundOn || sectionAudio.ended || reclaims >= 8) return;
+    reclaims++;
+    setTimeout(() => {
+      if (soundOn && sectionAudio.paused) sectionAudio.play().catch(() => {});
+    }, 80);
+  });
 
   function setSectionAudio(src) {
     if (sectionAudio.getAttribute('src') === src) return;
@@ -427,6 +440,9 @@
 
     showScreen(screenScene);
     loadVideo.pause();
+
+    // The room video has just grabbed for the audio session; take it back.
+    playAudio();
 
     requestAnimationFrame(() => captionCard.classList.add('visible'));
     typeCaption(chapter);
