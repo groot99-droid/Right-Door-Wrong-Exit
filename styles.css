@@ -108,6 +108,7 @@ body {
 
 .start-btn {
   position: relative;
+  top: 6vh;
   appearance: none;
   cursor: pointer;
   font-family: "Share Tech Mono", "Courier New", monospace;
@@ -251,7 +252,7 @@ body {
   animation: letterBurst 0.5s ease-out 1;
 }
 
-.reel-index {
+.reel-phase {
   margin-top: 0.7rem;
   font-size: 0.78rem;
   letter-spacing: 0.2em;

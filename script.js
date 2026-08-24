@@ -117,7 +117,7 @@
   const sceneVideo = document.getElementById('sceneVideo');
   const sceneTitleTop = document.getElementById('sceneTitleTop');
   const sceneTitleBottom = document.getElementById('sceneTitleBottom');
-  const sceneIndex = document.getElementById('sceneIndex');
+  const scenePhase = document.getElementById('scenePhase');
   const captionCard = document.getElementById('captionCard');
   const typedText = document.getElementById('typedText');
   const nextBtn = document.getElementById('nextBtn');
@@ -321,8 +321,7 @@
     captionCard.style.setProperty('--rot', chapter.rot);
     sceneTitleTop.textContent = chapter.room;
     buildFlicker(sceneTitleBottom, chapter.epithet);
-    sceneIndex.textContent = chapter.id + ' / ' + CHAPTERS[CHAPTERS.length - 1].id +
-      '  ·  ' + chapter.phase.split('—')[0].trim().toUpperCase();
+    scenePhase.textContent = chapter.phase.split('—')[0].trim().toUpperCase();
 
     setLog(chapter);
     hideNext();
