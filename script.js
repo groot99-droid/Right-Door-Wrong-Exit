@@ -1,211 +1,430 @@
 (function () {
-  const TYPE_START_DELAY_MS = 400;
-  const HOLD_MS = 20000;
+  'use strict';
+
+  // ---------------------------------------------------------------------------
+  // Chapters. Each entry pairs a loading clip (lowercase file) with the room
+  // video it glitches into (uppercase file), plus its caption and log entry.
+  // Filenames are case-sensitive and intentionally match the uploaded assets.
+  // ---------------------------------------------------------------------------
+  const CHAPTERS = [
+    {
+      id: 'A',
+      rot: '-1.2deg',
+      phase: 'Phase 1 — The Departure from Reality',
+      room: 'The Dining Room',
+      epithet: 'The Anchor',
+      load: 'a.MP4',
+      video: 'A.mp4',
+      caption: 'They said to wait in the dining room, but the house feels quiet. Too quiet. I don’t remember those stairs being so steep, or so dark. I think I have to go up.',
+      stamp: '14:32',
+      log: 'I shouldn’t have come down here. The carpet on these stairs smells like old ozone and dust, but I’ve been walking for what feels like hours. I look up, and the top of the stairwell is gone. It just loops. I have to keep going. There’s no other way.'
+    },
+    {
+      id: 'B',
+      rot: '1.1deg',
+      phase: 'Phase 1 — The Departure from Reality',
+      room: 'The Hallway',
+      epithet: 'The Descent',
+      load: 'b.MP4',
+      video: 'B.mp4',
+      caption: 'The stairs didn’t lead to the second floor. I’ve been walking down this hall for what feels like hours. The hum of the lights is getting louder. I just need to find a door.',
+      stamp: '18:15',
+      log: 'Found a hallway. The doors don’t feel right. I touched the wood on one of them and my hand tingled, like static electricity. For a second, the grain on the wood just... disappeared into gray lines. I’m so tired. I just need to find a room to catch my breath.'
+    },
+    {
+      id: 'C',
+      rot: '-0.8deg',
+      phase: 'Phase 2 — The Holding Cells',
+      room: 'Teal Room, Square Door',
+      epithet: 'The Glitch',
+      load: 'c.MP4',
+      video: 'C.mp4',
+      caption: 'Found a place to rest, but it doesn’t feel real. The air is entirely still. There’s no dust. That doorway... it doesn’t reflect any light. It just swallows it.',
+      stamp: '27:81',
+      log: 'Found a teal room. The time on my watch doesn’t make sense anymore. The second hand is ticking backward, but the sun outside the fake window never moves. I found an orange couch. I’m going to close my eyes. Just for a minute.'
+    },
+    {
+      id: 'D',
+      rot: '1.6deg',
+      phase: 'Phase 2 — The Holding Cells',
+      room: 'Teal Room, Arched Door',
+      epithet: 'The Mutation',
+      load: 'd.MP4',
+      video: 'D.MP4',
+      caption: 'I closed my eyes for a second. The room is the same, but the door changed. The architecture is breathing. It’s shifting when I don’t look directly at it.',
+      stamp: 'SysTime: 88:88',
+      log: 'I woke up but the room is wrong. I peeled back some of the wallpaper. It’s not wood or brick underneath; it’s a green, glowing grid. The room wasn’t just sitting here while I slept—it rebuilt itself. The humming is getting louder. I have to get through that arched doorway before it finishes.'
+    },
+    {
+      id: 'E',
+      rot: '-1.5deg',
+      phase: 'Phase 3 — The System Breakdown',
+      room: 'Flooded Corridor',
+      epithet: 'The Decay',
+      load: 'e.MP4',
+      video: 'E.mp4',
+      caption: 'The deeper I go, the more the illusion falls apart. They painted a sky on the wall to make us forget we’re buried. The water is freezing. Whatever is running this place is starting to break down.',
+      stamp: 'ERR_CLOCK_NOT_FOUND',
+      log: 'I broke through. It’s dark, and everything is wet. The water dripping from the ceiling doesn’t splash—it hits the ground as perfect, square blue blocks before melting into puddles. The environment is failing. I tried to walk across a grate but the metal felt soft. The whole corridor is groaning.'
+    },
+    {
+      id: 'F',
+      rot: '0.9deg',
+      phase: 'Phase 4 — The Empty Expanse',
+      room: 'Trampoline Park',
+      epithet: 'The Macro-Structure',
+      load: 'f.MP4',
+      video: 'F.mp4',
+      caption: 'I fell through a vent and landed here. It goes on forever. A playground for no one. The silence is so heavy it’s pressing against my eardrums. I have to keep moving.',
+      stamp: 'DISTANCE: NaN',
+      log: 'I didn’t hit the ground, I just... landed. I’m in a massive room covered in orange and black trampoline padding. No walls. No ceiling. The ground repeats. The exact same scuff mark passes under my feet every hundred steps. I am on a treadmill. The geometry is a sphere. I’m trapped in a loop.'
+    },
+    {
+      id: 'G',
+      rot: '-1.7deg',
+      phase: 'Phase 4 — The Empty Expanse',
+      room: 'Grocery Store',
+      epithet: 'The Anomaly',
+      load: 'g.MP4',
+      video: 'G.mp4',
+      caption: 'A grocery store, completely stripped. But right in the middle... a monument. Who roped off the cart? Am I following someone, or is the room trying to show me something?',
+      stamp: 'PING_DETECTED_0x8F',
+      log: 'Wait. Something changed. I heard a noise—a digital chime. I looked up and there is a single, bright red glow on the horizon. Out here? It’s an anomaly. It’s the only thing that isn’t supposed to be here. I’m heading for it.'
+    }
+  ];
+
+  const LOAD_MS = 4000;        // loading screen duration before the glitch
+  const GLITCH_MS = 900;       // total glitch length
+  const GLITCH_SWAP_MS = 320;  // when, inside the glitch, the screens swap
+  const TYPE_START_DELAY_MS = 700;
+
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  const sections = Array.from(document.querySelectorAll('section.reel'));
-  const state = new WeakMap();
+  // --- Elements --------------------------------------------------------------
+  const body = document.body;
+  const stage = document.getElementById('stage');
+  const screenHome = document.getElementById('screenHome');
+  const screenLoad = document.getElementById('screenLoad');
+  const screenScene = document.getElementById('screenScene');
 
-  const notes = {
-    r1: { tag: 'FN-01', title: 'THE WRONG DOOR', body: "The word comes from the Latin limen, \u201cthreshold.\u201d Anthropologists first used it for the middle stage of a rite of passage \u2014 the moment between what a person was and what they haven't become yet." },
-    r2: { tag: 'FN-02', title: 'NON-PLACE', body: 'Anthropologist Marc Aug\u00e9 coined \u201cnon-place\u201d for spaces built only to be passed through: airports, motorway stops, hotel corridors. He argued no one is ever truly present in them, including the people who run them.' },
-    r3: { tag: 'FN-03', title: 'THE HUM', body: 'Liminal-space photography became a genre online around 2019, built from ordinary interiors \u2014 empty malls, waiting rooms, motel hallways. The unease is structural, not supernatural: a space with no one in it reads as wrong.' },
-    r4: { tag: 'FN-04', title: 'ETERNAL RECURRENCE', body: 'Victor Turner extended the concept in the 1960s, describing liminality as a state rather than a stage \u2014 a condition some people, and some places, get stuck in, never completing the passage through.' },
-    r5: { tag: 'FN-05', title: 'NO EXIT', body: 'The \u201cBackrooms\u201d myth began with a single uncredited photo in 2019: a yellow, fluorescent-lit room with no visible exit. It spread because the image needed no story attached to unsettle people.' },
-    r6: { tag: 'FN-06', title: 'THE ONE WHO WAS JUST HERE', body: 'Liminal spaces unsettle partly because they show clear evidence of use \u2014 a chair, a cup, a coat \u2014 with no one present. The absence reads louder than the object does.' },
-    r7: { tag: 'FN-07', title: 'UNCANNY VALLEY OF SPACE', body: 'Freud\u2019s \u201cuncanny\u201d describes something almost familiar. Liminal architecture applies the same effect to rooms: recognizable enough to expect normal use, wrong enough that the eye can\u2019t finish the match.' }
-  };
+  const startBtn = document.getElementById('startBtn');
+  const loadVideo = document.getElementById('loadVideo');
+  const loadPhase = document.getElementById('loadPhase');
+  const loadLabel = document.getElementById('loadLabel');
+  const loadBarFill = document.getElementById('loadBarFill');
+  const loadPct = document.getElementById('loadPct');
 
-  const notesTitleEl = document.getElementById('notesTitle');
-  const notesTagEl = document.getElementById('notesTag');
-  const notesBodyEl = document.getElementById('notesBody');
+  const sceneVideo = document.getElementById('sceneVideo');
+  const sceneTitleTop = document.getElementById('sceneTitleTop');
+  const sceneTitleBottom = document.getElementById('sceneTitleBottom');
+  const sceneIndex = document.getElementById('sceneIndex');
+  const captionCard = document.getElementById('captionCard');
+  const typedText = document.getElementById('typedText');
+  const nextBtn = document.getElementById('nextBtn');
+  const nextLabel = document.getElementById('nextLabel');
+  const nextArrow = document.getElementById('nextArrow');
+  const glitchVeil = document.getElementById('glitchVeil');
 
-  function setActiveNote(id) {
-    const n = notes[id];
-    if (!n) return;
-    notesTitleEl.textContent = 'Field notes — ' + n.title;
-    notesTagEl.textContent = n.tag;
-    notesBodyEl.textContent = n.body;
+  const notesHandle = document.getElementById('notesHandle');
+  const notesTitle = document.getElementById('notesTitle');
+  const notesTag = document.getElementById('notesTag');
+  const notesBody = document.getElementById('notesBody');
+
+  // --- Run state -------------------------------------------------------------
+  let index = -1;            // index into CHAPTERS; -1 === home screen
+  let busy = false;          // true while loading/glitching, blocks double-clicks
+  let typing = false;
+  let typeTimeout = null;
+  let loadRaf = null;
+  let glitchTimeouts = [];
+
+  function clearPending() {
+    if (typeTimeout) { clearTimeout(typeTimeout); typeTimeout = null; }
+    if (loadRaf) { cancelAnimationFrame(loadRaf); loadRaf = null; }
+    glitchTimeouts.forEach(clearTimeout);
+    glitchTimeouts = [];
   }
 
-  sections.forEach((section) => {
-    state.set(section, {
-      typeTimeout: null,
-      holdTimeout: null,
-      active: false
+  function showScreen(el) {
+    [screenHome, screenLoad, screenScene].forEach((s) => {
+      const active = s === el;
+      s.classList.toggle('is-active', active);
+      s.setAttribute('aria-hidden', active ? 'false' : 'true');
     });
-  });
-
-  function clearTimers(section) {
-    const s = state.get(section);
-    if (s.typeTimeout) { clearTimeout(s.typeTimeout); s.typeTimeout = null; }
-    if (s.holdTimeout) { clearTimeout(s.holdTimeout); s.holdTimeout = null; }
   }
 
-  function resetSection(section) {
-    const s = state.get(section);
-    clearTimers(section);
-    s.active = false;
-    const card = section.querySelector('.center-card');
-    const typedEl = section.querySelector('.typed-text');
-    card.classList.remove('visible');
-    typedEl.textContent = '';
-  }
-
-  function startSection(section) {
-    const s = state.get(section);
-    if (s.active) return;
-    s.active = true;
-    clearTimers(section);
-
-    const card = section.querySelector('.center-card');
-    const typedEl = section.querySelector('.typed-text');
-    const fullText = section.dataset.text || '';
-    typedEl.textContent = '';
-
-    requestAnimationFrame(() => {
-      card.classList.add('visible');
-    });
-
-    if (reducedMotion) {
-      typedEl.textContent = fullText;
-      return;
-    }
-
-    let i = 0;
-    function typeChar() {
-      if (!s.active) return;
-      if (i <= fullText.length) {
-        typedEl.textContent = fullText.slice(0, i);
-        const justTyped = fullText[i - 1];
-        let delay = 34 + Math.random() * 20;
-        if (justTyped === '.' || justTyped === ',') delay += 550 + Math.random() * 250;
-        else if (Math.random() < 0.07) delay += 140;
-        i++;
-        s.typeTimeout = setTimeout(typeChar, delay);
-      } else {
-        s.holdTimeout = setTimeout(() => {
-          card.classList.remove('visible');
-        }, HOLD_MS);
-      }
-    }
-
-    s.typeTimeout = setTimeout(typeChar, TYPE_START_DELAY_MS);
-  }
-
-  const visibleVideos = new Set();
-  const observer = new IntersectionObserver((entries) => {
-    entries.forEach((entry) => {
-      const video = entry.target.querySelector('video');
-      if (video) {
-        if (entry.isIntersecting) {
-          visibleVideos.add(video);
-          video.play().catch(() => {});
-        } else {
-          visibleVideos.delete(video);
-          video.pause();
-        }
-      }
-
-      if (entry.isIntersecting && entry.intersectionRatio >= 0.95) {
-        startSection(entry.target);
-        setActiveNote(entry.target.dataset.note);
-      } else {
-        resetSection(entry.target);
-      }
-    });
-  }, { threshold: [0, 0.95, 1] });
-
-  sections.forEach((section) => observer.observe(section));
-
-  // --- Letter flicker on titleBottom (fluorescent-tube effect) ---
-  const flickerEls = Array.from(document.querySelectorAll('.reel-title-bottom'));
-  flickerEls.forEach((el) => {
-    const text = el.dataset.flicker || '';
+  // --- Fluorescent-tube letter flicker ---------------------------------------
+  function buildFlicker(el, text) {
+    el.dataset.flicker = text;
     el.innerHTML = '';
     text.split('').forEach((ch) => {
       const span = document.createElement('span');
       span.className = 'letter';
-      span.textContent = ch === ' ' ? '\u00a0' : ch;
+      span.textContent = ch === ' ' ? ' ' : ch;
       span.style.animationDelay = (Math.random() * 6).toFixed(2) + 's';
       span.style.animationDuration = (5 + Math.random() * 3).toFixed(2) + 's';
       el.appendChild(span);
     });
-  });
+  }
+
+  document.querySelectorAll('[data-flicker]').forEach((el) => buildFlicker(el, el.dataset.flicker));
 
   setInterval(() => {
-    if (!flickerEls.length) return;
-    const el = flickerEls[Math.floor(Math.random() * flickerEls.length)];
-    const letters = el.querySelectorAll('.letter');
-    if (!letters.length) return;
+    const els = Array.from(document.querySelectorAll('.reel-title-bottom'))
+      .filter((el) => el.offsetParent !== null && el.querySelector('.letter'));
+    if (!els.length) return;
+    const letters = els[Math.floor(Math.random() * els.length)].querySelectorAll('.letter');
+    const hits = new Set();
     const count = 1 + Math.floor(Math.random() * 2);
-    const hitIdx = new Set();
-    for (let n = 0; n < count; n++) hitIdx.add(Math.floor(Math.random() * letters.length));
-    hitIdx.forEach((idx) => {
-      const span = letters[idx];
+    for (let n = 0; n < count; n++) hits.add(Math.floor(Math.random() * letters.length));
+    hits.forEach((i) => {
+      const span = letters[i];
       span.classList.add('burst');
       setTimeout(() => span.classList.remove('burst'), 500);
     });
   }, 5000);
 
-  // --- Scroll parallax on background video + header ---
-  let raf = null;
-  function onScrollParallax() {
-    if (raf) return;
-    raf = requestAnimationFrame(() => {
-      raf = null;
-      const vh = window.innerHeight;
-      sections.forEach((sec) => {
-        const rect = sec.getBoundingClientRect();
-        const centerOffset = rect.top / vh;
-        const progress = Math.max(-1, Math.min(1, centerOffset));
-        const video = sec.querySelector('video');
-        const head = sec.querySelector('.reel-header');
-        if (video) video.style.transform = `scale(${1.05 + Math.abs(progress) * 0.1}) translateY(${progress * 30}px)`;
-        if (head) {
-          head.style.transform = `translateY(${progress * 40}px)`;
-          head.style.opacity = String(1 - Math.abs(progress) * 0.5);
-        }
-      });
+  // --- Log panel -------------------------------------------------------------
+  function setLog(chapter) {
+    if (!chapter) {
+      notesTitle.textContent = 'Log entry';
+      notesTag.textContent = '--:--';
+      notesBody.textContent = 'No entries recorded. The walk has not started yet.';
+      return;
+    }
+    notesTitle.textContent = 'Log entry — ' + chapter.room;
+    notesTag.textContent = chapter.stamp;
+    notesBody.textContent = chapter.log;
+  }
+
+  notesHandle.addEventListener('click', () => body.classList.toggle('notes-open'));
+  setLog(null);
+
+  // --- Typewriter ------------------------------------------------------------
+  function finishTyping(chapter) {
+    typing = false;
+    if (typeTimeout) { clearTimeout(typeTimeout); typeTimeout = null; }
+    typedText.textContent = chapter.caption;
+    revealNext();
+  }
+
+  function typeCaption(chapter) {
+    typedText.textContent = '';
+    typing = true;
+
+    if (reducedMotion) {
+      typeTimeout = setTimeout(() => finishTyping(chapter), TYPE_START_DELAY_MS);
+      return;
+    }
+
+    const full = chapter.caption;
+    let i = 0;
+
+    function step() {
+      if (!typing) return;
+      if (i > full.length) { finishTyping(chapter); return; }
+      typedText.textContent = full.slice(0, i);
+      const justTyped = full[i - 1];
+      let delay = 30 + Math.random() * 18;
+      if (justTyped === '.' || justTyped === '?') delay += 480 + Math.random() * 220;
+      else if (justTyped === ',') delay += 200 + Math.random() * 120;
+      else if (Math.random() < 0.06) delay += 130;
+      i++;
+      typeTimeout = setTimeout(step, delay);
+    }
+
+    typeTimeout = setTimeout(step, TYPE_START_DELAY_MS);
+  }
+
+  // Clicking the card skips ahead to the end of the caption.
+  captionCard.addEventListener('click', () => {
+    if (typing) finishTyping(CHAPTERS[index]);
+  });
+
+  function revealNext() {
+    const last = index === CHAPTERS.length - 1;
+    nextLabel.textContent = last ? 'BEGIN AGAIN' : 'NEXT';
+    nextArrow.innerHTML = last ? '&#8635;' : '&rarr;';
+    nextBtn.hidden = false;
+    requestAnimationFrame(() => nextBtn.classList.add('visible'));
+  }
+
+  function hideNext() {
+    nextBtn.classList.remove('visible');
+    nextBtn.hidden = true;
+  }
+
+  // --- Glitch transition -----------------------------------------------------
+  function glitchTo(fn) {
+    if (reducedMotion) {
+      stage.classList.add('fading');
+      glitchTimeouts.push(setTimeout(() => {
+        fn();
+        stage.classList.remove('fading');
+      }, 260));
+      return;
+    }
+    stage.classList.add('glitching');
+    glitchVeil.classList.add('firing');
+    glitchTimeouts.push(setTimeout(fn, GLITCH_SWAP_MS));
+    glitchTimeouts.push(setTimeout(() => {
+      stage.classList.remove('glitching');
+      glitchVeil.classList.remove('firing');
+    }, GLITCH_MS));
+  }
+
+  // --- Loading screen --------------------------------------------------------
+  function runLoader(chapter, done) {
+    loadPhase.textContent = chapter.phase.toUpperCase();
+    loadLabel.textContent = 'LOADING ROOM ' + chapter.id;
+    loadPct.textContent = '00%';
+    loadBarFill.style.width = '0%';
+
+    loadVideo.src = chapter.load;
+    loadVideo.load();
+    loadVideo.play().catch(() => {});
+
+    // The room video buffers behind the loading clip for the full four seconds.
+    sceneVideo.src = chapter.video;
+    sceneVideo.load();
+
+    showScreen(screenLoad);
+
+    const started = performance.now();
+    function tick(now) {
+      const elapsed = now - started;
+      const linear = Math.min(1, elapsed / LOAD_MS);
+      // Stutter the readout so it never climbs cleanly to 100.
+      const jitter = linear < 1 ? (Math.random() - 0.5) * 0.04 : 0;
+      const shown = Math.max(0, Math.min(1, linear + jitter));
+      loadBarFill.style.width = (linear * 100).toFixed(1) + '%';
+      loadPct.textContent = String(Math.round(shown * 100)).padStart(2, '0') + '%';
+      if (linear < 1) {
+        loadRaf = requestAnimationFrame(tick);
+      } else {
+        loadRaf = null;
+        loadPct.textContent = '100%';
+        done();
+      }
+    }
+    loadRaf = requestAnimationFrame(tick);
+  }
+
+  // --- Chapter screen --------------------------------------------------------
+  function enterChapter(i) {
+    index = i;
+    const chapter = CHAPTERS[i];
+
+    body.className = 'chapter-' + chapter.id.toLowerCase() +
+      (body.classList.contains('notes-open') ? ' notes-open' : '');
+
+    captionCard.style.setProperty('--rot', chapter.rot);
+    sceneTitleTop.textContent = chapter.room;
+    buildFlicker(sceneTitleBottom, chapter.epithet);
+    sceneIndex.textContent = chapter.id + ' / ' + CHAPTERS[CHAPTERS.length - 1].id +
+      '  ·  ' + chapter.phase.split('—')[0].trim().toUpperCase();
+
+    setLog(chapter);
+    hideNext();
+    typedText.textContent = '';
+
+    if (sceneVideo.src.indexOf(chapter.video) === -1) sceneVideo.src = chapter.video;
+    // Safari throws if currentTime is set before any metadata has arrived.
+    if (sceneVideo.readyState > 0) sceneVideo.currentTime = 0;
+    sceneVideo.play().catch(() => {});
+
+    showScreen(screenScene);
+    loadVideo.pause();
+
+    requestAnimationFrame(() => captionCard.classList.add('visible'));
+    typeCaption(chapter);
+    busy = false;
+
+    // Warm up the next loading clip while this room is being read.
+    const next = CHAPTERS[i + 1];
+    if (next) {
+      const warm = document.createElement('video');
+      warm.preload = 'auto';
+      warm.muted = true;
+      warm.src = next.load;
+    }
+  }
+
+  // --- Navigation ------------------------------------------------------------
+  function goToChapter(i) {
+    if (busy) return;
+    busy = true;
+    clearPending();
+    typing = false;
+    hideNext();
+    captionCard.classList.remove('visible');
+
+    runLoader(CHAPTERS[i], () => {
+      glitchTo(() => enterChapter(i));
     });
   }
-  window.addEventListener('scroll', onScrollParallax, { passive: true });
-  onScrollParallax();
 
-  // --- Field notes tab toggle ---
-  const notesHandle = document.getElementById('notesHandle');
-  notesHandle.addEventListener('click', () => {
-    document.body.classList.toggle('notes-open');
+  function goHome() {
+    if (busy) return;
+    busy = true;
+    clearPending();
+    typing = false;
+    hideNext();
+    captionCard.classList.remove('visible');
+
+    glitchTo(() => {
+      index = -1;
+      body.className = 'phase-home' + (body.classList.contains('notes-open') ? ' notes-open' : '');
+      sceneVideo.pause();
+      loadVideo.pause();
+      setLog(null);
+      body.classList.remove('notes-open');
+      showScreen(screenHome);
+      busy = false;
+    });
+  }
+
+  startBtn.addEventListener('click', () => goToChapter(0));
+
+  nextBtn.addEventListener('click', () => {
+    if (busy) return;
+    if (index === CHAPTERS.length - 1) goHome();
+    else goToChapter(index + 1);
   });
-  setActiveNote('r1');
 
-  // --- Ambient audio, decoupled from per-section (always-muted) videos ---
+  // Enter / Space advances too, without stealing the keys from a focused button.
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    if (document.activeElement && document.activeElement.tagName === 'BUTTON') return;
+    if (busy) return;
+    if (index === -1) { e.preventDefault(); startBtn.click(); }
+    else if (typing) { e.preventDefault(); finishTyping(CHAPTERS[index]); }
+    else if (!nextBtn.hidden) { e.preventDefault(); nextBtn.click(); }
+  });
+
+  // --- Ambient audio ---------------------------------------------------------
   const soundToggle = document.getElementById('soundToggle');
   const ambientAudio = document.getElementById('ambientAudio');
   let soundOn = false;
 
   function setSound(on) {
     soundOn = on;
-    if (on) {
-      ambientAudio.play().catch(() => {});
-    } else {
-      ambientAudio.pause();
-    }
+    if (on) ambientAudio.play().catch(() => {});
+    else ambientAudio.pause();
     soundToggle.setAttribute('aria-pressed', String(on));
     soundToggle.querySelector('.label').textContent = on ? 'SOUND ON' : 'SOUND OFF';
   }
 
   soundToggle.addEventListener('click', () => setSound(!soundOn));
 
-  // Autoplay can still be gated behind a first gesture on some browsers even muted.
-  document.addEventListener(
-    'click',
-    (e) => {
-      if (e.target === soundToggle || soundToggle.contains(e.target)) return;
-      visibleVideos.forEach((v) => v.play().catch(() => {}));
-    },
-    { once: true }
-  );
+  // Some browsers still gate muted autoplay behind a first gesture.
+  document.addEventListener('click', (e) => {
+    if (soundToggle.contains(e.target)) return;
+    [loadVideo, sceneVideo].forEach((v) => {
+      if (v.src && !v.paused) return;
+      if (v.closest('.screen').classList.contains('is-active')) v.play().catch(() => {});
+    });
+  }, { once: true });
 
   window.addEventListener('beforeunload', () => { try { ambientAudio.pause(); } catch (_) {} });
 })();

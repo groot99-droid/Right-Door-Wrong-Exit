@@ -3,118 +3,76 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>THE WRONG PLACE — Scroll Reel</title>
+<title>RIGHT DOOR, WRONG EXIT</title>
+<meta name="description" content="A looping liminal-space walkthrough: seven rooms, seven loading screens, no exit." />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23000'/%3E%3Crect x='9' y='5' width='14' height='22' fill='none' stroke='%23ffb703' stroke-width='2'/%3E%3Ccircle cx='19' cy='16' r='1.6' fill='%23ffb703'/%3E%3C/svg%3E" />
 <link rel="stylesheet" href="styles.css" />
 </head>
-<body>
+<body class="phase-home">
 
 <button class="sound-toggle" id="soundToggle" aria-pressed="false" type="button">
   <span class="dot"></span>
   <span class="label">SOUND OFF</span>
 </button>
 
-<button class="notes-tab-handle" id="notesHandle" type="button">NOTES</button>
+<button class="notes-tab-handle" id="notesHandle" type="button">LOG</button>
 
-<aside class="notes-panel" id="notesPanel">
-  <div class="notes-title" id="notesTitle">Field notes — THE WRONG DOOR</div>
-  <div class="notes-tag" id="notesTag">FN-01</div>
+<aside class="notes-panel" id="notesPanel" aria-live="polite">
+  <div class="notes-title" id="notesTitle">Log entry</div>
+  <div class="notes-tag" id="notesTag">--:--</div>
   <div class="notes-body" id="notesBody"></div>
 </aside>
 
 <audio id="ambientAudio" loop preload="auto" src="ambient.mp3"></audio>
 
-<div class="scroll-hint">SCROLL ↓</div>
+<main class="stage" id="stage">
 
-<section class="reel" id="r1" data-note="r1"
-  data-text="The door was already open when you got here. You don't remember opening it. You don't remember arriving, either.">
-  <video src="reel-01.mp4" autoplay muted loop playsinline preload="auto"></video>
-  <div class="reel-header">
-    <div class="reel-title-top">Right Door</div>
-    <div class="reel-title-bottom" data-flicker="Wrong Exit"></div>
-    <div class="reel-index">01 / 07</div>
-  </div>
-  <div class="center-card" style="--rot:-1.4deg">
-    <span class="typed-text"></span><span class="cursor"></span>
-  </div>
-</section>
+  <!-- ============ HOME ============ -->
+  <section class="screen screen-home is-active" id="screenHome">
+    <img class="home-bg" id="homeBg" src="0.PNG" alt="" />
+    <div class="home-inner">
+      <button class="start-btn" id="startBtn" type="button">
+        <span class="start-btn-label">START</span>
+      </button>
+      <div class="home-sub" id="homeSub">SEVEN ROOMS &middot; FOUR PHASES &middot; NO EXIT</div>
+    </div>
+  </section>
 
-<section class="reel" id="r2" data-note="r2"
-  data-text="This hallway has no name and never earned one. It exists only to be passed through. No one has ever arrived here on purpose.">
-  <video src="reel-02.mp4" autoplay muted loop playsinline preload="auto"></video>
-  <div class="reel-header">
-    <div class="reel-title-top">No Space Like A</div>
-    <div class="reel-title-bottom" data-flicker="Non-Place"></div>
-    <div class="reel-index">02 / 07</div>
-  </div>
-  <div class="center-card" style="--rot:1.1deg">
-    <span class="typed-text"></span><span class="cursor"></span>
-  </div>
-</section>
+  <!-- ============ LOADING ============ -->
+  <section class="screen screen-load" id="screenLoad" aria-hidden="true">
+    <video id="loadVideo" muted loop playsinline preload="auto"></video>
+    <div class="load-ui">
+      <div class="load-phase" id="loadPhase"></div>
+      <div class="load-label" id="loadLabel">LOADING</div>
+      <div class="load-bar"><div class="load-bar-fill" id="loadBarFill"></div></div>
+      <div class="load-pct" id="loadPct">00%</div>
+    </div>
+  </section>
 
-<section class="reel" id="r3" data-note="r3"
-  data-text="The hum was already running when the building was built. It doesn't come from anywhere. It doesn't stop.">
-  <video src="reel-03.mp4" autoplay muted loop playsinline preload="auto"></video>
-  <div class="reel-header">
-    <div class="reel-title-top">The Sound of Liminality</div>
-    <div class="reel-title-bottom" data-flicker="Fluorescent Bulbs"></div>
-    <div class="reel-index">03 / 07</div>
-  </div>
-  <div class="center-card" style="--rot:-0.8deg">
-    <span class="typed-text"></span><span class="cursor"></span>
-  </div>
-</section>
+  <!-- ============ SCENE ============ -->
+  <section class="screen screen-scene" id="screenScene" aria-hidden="true">
+    <video id="sceneVideo" muted loop playsinline preload="auto"></video>
+    <div class="reel-header">
+      <div class="reel-title-top" id="sceneTitleTop"></div>
+      <div class="reel-title-bottom" id="sceneTitleBottom"></div>
+      <div class="reel-index" id="sceneIndex"></div>
+    </div>
+    <div class="center-card" id="captionCard">
+      <span class="typed-text" id="typedText"></span><span class="cursor"></span>
+    </div>
+    <button class="next-btn" id="nextBtn" type="button" hidden>
+      <span class="next-label" id="nextLabel">NEXT</span>
+      <span class="next-arrow" id="nextArrow">&rarr;</span>
+    </button>
+  </section>
 
-<section class="reel" id="r4" data-note="r4"
-  data-text="You have stood in this exact spot before. The carpet remembers your weight. You will stand here again.">
-  <video src="reel-04.mp4" autoplay muted loop playsinline preload="auto"></video>
-  <div class="reel-header">
-    <div class="reel-title-top">Eternal Recurrence</div>
-    <div class="reel-title-bottom" data-flicker="Just Keep Moving"></div>
-    <div class="reel-index">04 / 07</div>
+  <div class="glitch-veil" id="glitchVeil" aria-hidden="true">
+    <div class="glitch-bars"></div>
+    <div class="glitch-noise"></div>
+    <div class="glitch-rgb"></div>
   </div>
-  <div class="center-card" style="--rot:1.6deg">
-    <span class="typed-text"></span><span class="cursor"></span>
-  </div>
-</section>
 
-<section class="reel" id="r5" data-note="r5"
-  data-text="The exit sign burned out sometime before you got here. No one has replaced it. No one intends to.">
-  <video src="reel-05.mp4" autoplay muted loop playsinline preload="auto"></video>
-  <div class="reel-header">
-    <div class="reel-title-top">There's No Exit</div>
-    <div class="reel-title-bottom" data-flicker="In The Backrooms"></div>
-    <div class="reel-index">05 / 07</div>
-  </div>
-  <div class="center-card" style="--rot:-1.2deg">
-    <span class="typed-text"></span><span class="cursor"></span>
-  </div>
-</section>
-
-<section class="reel" id="r6" data-note="r6"
-  data-text="Someone was sitting in that chair. It's still warm. They left in a hurry, or they didn't leave at all.">
-  <video src="reel-06.mp4" autoplay muted loop playsinline preload="auto"></video>
-  <div class="reel-header">
-    <div class="reel-title-top">You Just Missed Them</div>
-    <div class="reel-title-bottom" data-flicker="Someone Was Here"></div>
-    <div class="reel-index">06 / 07</div>
-  </div>
-  <div class="center-card" style="--rot:0.9deg">
-    <span class="typed-text"></span><span class="cursor"></span>
-  </div>
-</section>
-
-<section class="reel" id="r7" data-note="r7"
-  data-text="This room knows what a room should look like. It got most of it right. The parts it got wrong are the parts that matter.">
-  <video src="reel-07.mp4" autoplay muted loop playsinline preload="auto"></video>
-  <div class="reel-header">
-    <div class="reel-title-top">Where Spaces Meet</div>
-    <div class="reel-title-bottom" data-flicker="The Uncanny Valley"></div>
-    <div class="reel-index">07 / 07</div>
-  </div>
-  <div class="center-card" style="--rot:-1.7deg">
-    <span class="typed-text"></span><span class="cursor"></span>
-  </div>
-</section>
+</main>
 
 <script src="script.js"></script>
 </body>
