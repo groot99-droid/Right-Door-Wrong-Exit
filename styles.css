@@ -140,19 +140,6 @@ body {
   50%      { border-color: rgba(255, 183, 3, 0.95); }
 }
 
-.home-sub {
-  position: absolute;
-  left: 50%;
-  bottom: 6vh;
-  transform: translateX(-50%);
-  white-space: nowrap;
-  font-size: clamp(0.55rem, 1.5vw, 0.75rem);
-  letter-spacing: 0.34em;
-  text-indent: 0.34em;
-  opacity: 0.7;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9);
-}
-
 /* ==========================================================================
    Loading screen
    ========================================================================== */
@@ -524,8 +511,7 @@ body {
 }
 
 body.phase-home .notes-tab-handle {
-  opacity: 0;
-  pointer-events: none;
+  display: none;
 }
 
 .notes-panel {
@@ -647,8 +633,6 @@ body.notes-open .notes-tab-handle { right: min(33vw, 420px); }
   .reel-header { top: 10vh; }
   .next-btn { bottom: 6vh; padding: 0.8rem 1.5rem; }
   .load-ui { bottom: 10vh; }
-  .home-sub { letter-spacing: 0.22em; text-indent: 0.22em; }
-
   .notes-tab-handle {
     top: auto;
     bottom: 16vh;
