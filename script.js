@@ -188,6 +188,25 @@
     soundToggle.querySelector('.label').textContent = soundOn ? 'SOUND ON' : 'SOUND OFF';
   }
 
+  const gate = document.getElementById('gate');
+  let gateUp = true;
+
+  function openGate(e) {
+    if (!gateUp) return;
+    gateUp = false;
+    // This listener is registered before the navigation one, so a keypress that
+    // opens the gate must not also fall through and press START.
+    if (e && e.stopImmediatePropagation) e.stopImmediatePropagation();
+    document.removeEventListener('keydown', openGate);
+    gate.classList.add('gone');
+    gate.addEventListener('transitionend', () => gate.remove(), { once: true });
+    setTimeout(() => { if (gate.isConnected) gate.remove(); }, 900);
+    playAudio();
+  }
+
+  gate.addEventListener('click', openGate);
+  document.addEventListener('keydown', openGate);
+
   soundToggle.addEventListener('click', () => {
     soundOn = !soundOn;
     applySound();
@@ -468,6 +487,7 @@
 
   // Enter / Space advances too, without stealing the keys from a focused button.
   document.addEventListener('keydown', (e) => {
+    if (gateUp) return;
     if (e.key !== 'Enter' && e.key !== ' ') return;
     if (document.activeElement && document.activeElement.tagName === 'BUTTON') return;
     if (busy) return;

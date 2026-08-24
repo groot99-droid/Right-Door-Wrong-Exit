@@ -12,7 +12,7 @@ Built with plain HTML, CSS, and JavaScript — no framework, no build step, no d
 ## The loop
 
 ```
-0.PNG (home) ──START──▶ a.MP4 (4s load) ──glitch──▶ A.mp4 (room + caption)
+gate ──click──▶ 0.PNG (home) ──START──▶ a.MP4 (4s load) ──glitch──▶ A.mp4 (room + caption)
                               ▲                            │
                               │                          NEXT
                               └────── b.MP4 … g.MP4 ◀──────┘
@@ -68,8 +68,10 @@ Then open `http://localhost:8080/index.html`.
   with its loading clip and keeps playing through the glitch and the room itself, so the four
   seconds of loading and the room that follows are one continuous piece of sound.
 - The video clips keep their own audio underneath, at 20% volume (`VIDEO_VOLUME` in `script.js`).
-- Browsers block audible playback until the visitor interacts with the page, so if the home
-  track can't start on load it's armed to begin on the first click or keypress. The `SOUND ON`
-  toggle mutes and unmutes everything — section track and clip audio together.
+- Browsers block audible playback until the visitor interacts with the page, so the site opens
+  on a `CLICK ANYWHERE TO BEGIN` veil over the darkened title card. That one click (or keypress)
+  is what lets `0.mp3` start; the veil then fades and leaves you on the home screen with START
+  still to press. The `SOUND ON` toggle mutes and unmutes everything — section track and clip
+  audio together.
 - `prefers-reduced-motion` swaps the glitch for a plain fade and prints captions instantly; the
   four-second loading beat is kept either way.

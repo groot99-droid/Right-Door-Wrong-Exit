@@ -448,6 +448,45 @@ body {
 .stage.fading .screen.is-active { opacity: 0; }
 
 /* ==========================================================================
+   Opening gate — one gesture, so the home track is allowed to start
+   ========================================================================== */
+
+.gate {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.93);
+  cursor: pointer;
+  transition: opacity 0.6s ease;
+}
+
+.gate.gone {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.gate-text {
+  position: relative;
+  top: 13vh;                 /* clear of the START button behind the veil */
+  font-family: "Share Tech Mono", "Courier New", monospace;
+  font-size: clamp(0.7rem, 2vw, 0.95rem);
+  letter-spacing: 0.4em;
+  text-indent: 0.4em;
+  color: #ffb703;
+  text-shadow: 0 0 18px rgba(255, 183, 3, 0.35), 0 2px 10px rgba(0, 0, 0, 0.95);
+  animation: gateBlink 2.6s steps(1) infinite;
+}
+
+@keyframes gateBlink {
+  0%, 62%   { opacity: 1; }
+  66%, 72%  { opacity: 0.25; }
+  76%, 100% { opacity: 1; }
+}
+
+/* ==========================================================================
    Chrome: sound toggle + log panel
    ========================================================================== */
 
@@ -600,6 +639,7 @@ body.notes-open .notes-tab-handle { right: min(33vw, 420px); }
   .next-btn .next-arrow,
   .reel-title-bottom .letter { animation: none; }
   .cursor { animation: none; opacity: 1; }
+  .gate-text { animation: none; }
   .stage.glitching .screen.is-active { animation: none; }
 }
 
