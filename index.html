@@ -10,26 +10,26 @@
 </head>
 <body class="phase-home">
 
-<button class="sound-toggle" id="soundToggle" aria-pressed="false" type="button">
+<button class="sound-toggle" id="soundToggle" aria-pressed="true" type="button">
   <span class="dot"></span>
-  <span class="label">SOUND OFF</span>
+  <span class="label">SOUND ON</span>
 </button>
 
 <button class="notes-tab-handle" id="notesHandle" type="button">LOG</button>
 
-<aside class="notes-panel" id="notesPanel" aria-live="polite">
+<aside class="notes-panel" aria-live="polite">
   <div class="notes-title" id="notesTitle">Log entry</div>
   <div class="notes-tag" id="notesTag">--:--</div>
   <div class="notes-body" id="notesBody"></div>
 </aside>
 
-<audio id="ambientAudio" loop preload="auto" src="ambient.mp3"></audio>
+<audio id="sectionAudio" loop preload="auto"></audio>
 
 <main class="stage" id="stage">
 
   <!-- ============ HOME ============ -->
   <section class="screen screen-home is-active" id="screenHome">
-    <img class="home-bg" id="homeBg" src="0.PNG" alt="" />
+    <img class="home-bg" src="0.PNG" alt="" />
     <div class="home-inner">
       <button class="start-btn" id="startBtn" type="button">
         <span class="start-btn-label">START</span>

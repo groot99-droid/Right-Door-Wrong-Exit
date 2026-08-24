@@ -9,6 +9,7 @@
   const CHAPTERS = [
     {
       id: 'A',
+      audio: 'A.mp3',
       rot: '-1.2deg',
       phase: 'Phase 1 — The Departure from Reality',
       room: 'The Dining Room',
@@ -21,6 +22,7 @@
     },
     {
       id: 'B',
+      audio: 'B.mp3',
       rot: '1.1deg',
       phase: 'Phase 1 — The Departure from Reality',
       room: 'The Hallway',
@@ -33,6 +35,7 @@
     },
     {
       id: 'C',
+      audio: 'C.mp3',
       rot: '-0.8deg',
       phase: 'Phase 2 — The Holding Cells',
       room: 'Teal Room, Square Door',
@@ -45,6 +48,7 @@
     },
     {
       id: 'D',
+      audio: 'D.mp3',
       rot: '1.6deg',
       phase: 'Phase 2 — The Holding Cells',
       room: 'Teal Room, Arched Door',
@@ -57,6 +61,7 @@
     },
     {
       id: 'E',
+      audio: 'E.mp3',
       rot: '-1.5deg',
       phase: 'Phase 3 — The System Breakdown',
       room: 'Flooded Corridor',
@@ -69,6 +74,7 @@
     },
     {
       id: 'F',
+      audio: 'F.mp3',
       rot: '0.9deg',
       phase: 'Phase 4 — The Empty Expanse',
       room: 'Trampoline Park',
@@ -81,6 +87,7 @@
     },
     {
       id: 'G',
+      audio: 'G.mp3',
       rot: '-1.7deg',
       phase: 'Phase 4 — The Empty Expanse',
       room: 'Grocery Store',
@@ -92,6 +99,9 @@
       log: 'Wait. Something changed. I heard a noise—a digital chime. I looked up and there is a single, bright red glow on the horizon. Out here? It’s an anomaly. It’s the only thing that isn’t supposed to be here. I’m heading for it.'
     }
   ];
+
+  const HOME_AUDIO = '0.mp3';  // plays on the title card
+  const VIDEO_VOLUME = 0.2;    // the clips' own sound, kept under the section track
 
   const LOAD_MS = 4000;        // loading screen duration before the glitch
   const GLITCH_MS = 900;       // total glitch length
@@ -125,10 +135,67 @@
   const nextArrow = document.getElementById('nextArrow');
   const glitchVeil = document.getElementById('glitchVeil');
 
+  const sectionAudio = document.getElementById('sectionAudio');
   const notesHandle = document.getElementById('notesHandle');
   const notesTitle = document.getElementById('notesTitle');
   const notesTag = document.getElementById('notesTag');
   const notesBody = document.getElementById('notesBody');
+
+  // --- Sound ------------------------------------------------------------------
+  // One track per section: the home card gets 0.mp3, and each room's track
+  // starts with its loading clip and carries through the glitch into the room.
+  // The clips keep their own sound underneath at VIDEO_VOLUME.
+  const soundToggle = document.getElementById('soundToggle');
+  let soundOn = true;
+  let gestureArmed = false;
+
+  function armGesture() {
+    if (gestureArmed) return;
+    gestureArmed = true;
+    const resume = () => {
+      gestureArmed = false;
+      document.removeEventListener('pointerdown', resume);
+      document.removeEventListener('keydown', resume);
+      playAudio();
+      [loadVideo, sceneVideo].forEach((v) => {
+        if (v.src && v.closest('.screen').classList.contains('is-active')) v.play().catch(() => {});
+      });
+    };
+    document.addEventListener('pointerdown', resume);
+    document.addEventListener('keydown', resume);
+  }
+
+  function playAudio() {
+    if (!soundOn || !sectionAudio.getAttribute('src')) return;
+    // Browsers block audible playback until the visitor has interacted.
+    sectionAudio.play().catch(armGesture);
+  }
+
+  function setSectionAudio(src) {
+    if (sectionAudio.getAttribute('src') === src) return;
+    sectionAudio.setAttribute('src', src);
+    sectionAudio.load();
+    playAudio();
+  }
+
+  function applySound() {
+    sectionAudio.muted = !soundOn;
+    [loadVideo, sceneVideo].forEach((v) => {
+      v.muted = !soundOn;
+      v.volume = VIDEO_VOLUME;
+    });
+    soundToggle.setAttribute('aria-pressed', String(soundOn));
+    soundToggle.querySelector('.label').textContent = soundOn ? 'SOUND ON' : 'SOUND OFF';
+  }
+
+  soundToggle.addEventListener('click', () => {
+    soundOn = !soundOn;
+    applySound();
+    if (soundOn) playAudio();
+    else sectionAudio.pause();
+  });
+
+  applySound();
 
   // --- Run state -------------------------------------------------------------
   let index = -1;            // index into CHAPTERS; -1 === home screen
@@ -199,6 +266,7 @@
 
   notesHandle.addEventListener('click', () => body.classList.toggle('notes-open'));
   setLog(null);
+  setSectionAudio(HOME_AUDIO);
 
   // --- Typewriter ------------------------------------------------------------
   function finishTyping(chapter) {
@@ -280,9 +348,13 @@
     loadPct.textContent = '00%';
     loadBarFill.style.width = '0%';
 
+    setSectionAudio(chapter.audio);
+
     loadVideo.src = chapter.load;
     loadVideo.load();
-    loadVideo.play().catch(() => {});
+    loadVideo.muted = !soundOn;
+    loadVideo.volume = VIDEO_VOLUME;
+    loadVideo.play().catch(armGesture);
 
     // The room video buffers behind the loading clip for the full four seconds.
     sceneVideo.src = chapter.video;
@@ -330,7 +402,9 @@
     if (sceneVideo.src.indexOf(chapter.video) === -1) sceneVideo.src = chapter.video;
     // Safari throws if currentTime is set before any metadata has arrived.
     if (sceneVideo.readyState > 0) sceneVideo.currentTime = 0;
-    sceneVideo.play().catch(() => {});
+    sceneVideo.muted = !soundOn;
+    sceneVideo.volume = VIDEO_VOLUME;
+    sceneVideo.play().catch(armGesture);
 
     showScreen(screenScene);
     loadVideo.pause();
@@ -378,6 +452,7 @@
       loadVideo.pause();
       setLog(null);
       body.classList.remove('notes-open');
+      setSectionAudio(HOME_AUDIO);
       showScreen(screenHome);
       busy = false;
     });
@@ -401,29 +476,5 @@
     else if (!nextBtn.hidden) { e.preventDefault(); nextBtn.click(); }
   });
 
-  // --- Ambient audio ---------------------------------------------------------
-  const soundToggle = document.getElementById('soundToggle');
-  const ambientAudio = document.getElementById('ambientAudio');
-  let soundOn = false;
-
-  function setSound(on) {
-    soundOn = on;
-    if (on) ambientAudio.play().catch(() => {});
-    else ambientAudio.pause();
-    soundToggle.setAttribute('aria-pressed', String(on));
-    soundToggle.querySelector('.label').textContent = on ? 'SOUND ON' : 'SOUND OFF';
-  }
-
-  soundToggle.addEventListener('click', () => setSound(!soundOn));
-
-  // Some browsers still gate muted autoplay behind a first gesture.
-  document.addEventListener('click', (e) => {
-    if (soundToggle.contains(e.target)) return;
-    [loadVideo, sceneVideo].forEach((v) => {
-      if (v.src && !v.paused) return;
-      if (v.closest('.screen').classList.contains('is-active')) v.play().catch(() => {});
-    });
-  }, { once: true });
-
-  window.addEventListener('beforeunload', () => { try { ambientAudio.pause(); } catch (_) {} });
+  window.addEventListener('beforeunload', () => { try { sectionAudio.pause(); } catch (_) {} });
 })();

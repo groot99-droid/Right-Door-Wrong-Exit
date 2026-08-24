@@ -18,15 +18,17 @@ Built with plain HTML, CSS, and JavaScript — no framework, no build step, no d
                               └────── b.MP4 … g.MP4 ◀──────┘
 ```
 
-| Room | Video | Loading clip | Phase |
-| --- | --- | --- | --- |
-| The Dining Room — The Anchor | `A.mp4` | `a.MP4` | 1 · The Departure from Reality |
-| The Hallway — The Descent | `B.mp4` | `b.MP4` | 1 · The Departure from Reality |
-| Teal Room, Square Door — The Glitch | `C.mp4` | `c.MP4` | 2 · The Holding Cells |
-| Teal Room, Arched Door — The Mutation | `D.MP4` | `d.MP4` | 2 · The Holding Cells |
-| Flooded Corridor — The Decay | `E.mp4` | `e.MP4` | 3 · The System Breakdown |
-| Trampoline Park — The Macro-Structure | `F.mp4` | `f.MP4` | 4 · The Empty Expanse |
-| Grocery Store — The Anomaly | `G.mp4` | `g.MP4` | 4 · The Empty Expanse |
+| Room | Video | Loading clip | Audio | Phase |
+| --- | --- | --- | --- | --- |
+| The Dining Room — The Anchor | `A.mp4` | `a.MP4` | `A.mp3` | 1 · The Departure from Reality |
+| The Hallway — The Descent | `B.mp4` | `b.MP4` | `B.mp3` | 1 · The Departure from Reality |
+| Teal Room, Square Door — The Glitch | `C.mp4` | `c.MP4` | `C.mp3` | 2 · The Holding Cells |
+| Teal Room, Arched Door — The Mutation | `D.MP4` | `d.MP4` | `D.mp3` | 2 · The Holding Cells |
+| Flooded Corridor — The Decay | `E.mp4` | `e.MP4` | `E.mp3` | 3 · The System Breakdown |
+| Trampoline Park — The Macro-Structure | `F.mp4` | `f.MP4` | `F.mp3` | 4 · The Empty Expanse |
+| Grocery Store — The Anomaly | `G.mp4` | `g.MP4` | `G.mp3` | 4 · The Empty Expanse |
+
+The home screen runs on `0.PNG` and `0.mp3`.
 
 ## Running locally
 
@@ -48,7 +50,8 @@ Then open `http://localhost:8080/index.html`.
 - `0.PNG` — the arcade-cabinet home screen.
 - `A.mp4` … `G.mp4` — the seven room videos.
 - `a.MP4` … `g.MP4` — the seven loading-screen clips, one per room.
-- `ambient.mp3` — looping ambient audio, muted by default until the user opts in via the sound toggle.
+- `0.mp3` — the home screen's audio track.
+- `A.mp3` … `G.mp3` — one audio track per room, started by the room's loading screen.
 
 ## Notes
 
@@ -61,7 +64,12 @@ Then open `http://localhost:8080/index.html`.
 - The `LOG` tab on the right slides out the in-world log entry for the room you're standing in.
 - The loading screen serves double duty: it buffers the upcoming room video for its full four
   seconds, so the room is ready when the glitch lands.
-- Videos autoplay muted (browser-compliant); the ambient audio track only plays once the user
-  clicks the sound toggle.
+- Each section owns one audio track. `0.mp3` runs under the home screen; a room's track starts
+  with its loading clip and keeps playing through the glitch and the room itself, so the four
+  seconds of loading and the room that follows are one continuous piece of sound.
+- The video clips keep their own audio underneath, at 20% volume (`VIDEO_VOLUME` in `script.js`).
+- Browsers block audible playback until the visitor interacts with the page, so if the home
+  track can't start on load it's armed to begin on the first click or keypress. The `SOUND ON`
+  toggle mutes and unmutes everything — section track and clip audio together.
 - `prefers-reduced-motion` swaps the glitch for a plain fade and prints captions instantly; the
   four-second loading beat is kept either way.
