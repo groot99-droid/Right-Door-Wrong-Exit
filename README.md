@@ -1,8 +1,8 @@
 # Right Door, Wrong Exit
 
 A single-page, click-through liminal-space walkthrough in the backrooms genre. It opens on an
-arcade-cabinet title card with a **START** button; starting the walk drops you into a four-second
-loading screen that glitches into the first room. Each room plays a looping video behind a
+arcade-cabinet title card with a **START** button; starting the walk drops you into a loading
+screen that plays its clip all the way through and then glitches into the first room. Each room plays a looping video behind a
 typewritten caption, and once the caption finishes typing a **NEXT** button appears — clicking it
 runs the next loading screen, the next glitch, the next room. Seven rooms later the loop returns
 you to the title card.
@@ -12,7 +12,7 @@ Built with plain HTML, CSS, and JavaScript — no framework, no build step, no d
 ## The loop
 
 ```
-gate ──click──▶ 0.PNG (home) ──START──▶ a.MP4 (4s load) ──glitch──▶ A.mp4 (room + caption)
+gate ──click──▶ 0.PNG (home) ──START──▶ a.MP4 (plays in full) ──glitch──▶ A.mp4 (room + caption)
                               ▲                            │
                               │                          NEXT
                               └────── b.MP4 … g.MP4 ◀──────┘
@@ -62,16 +62,23 @@ Then open `http://localhost:8080/index.html`.
 - Captions type themselves out character by character; clicking the paper card (or pressing
   Enter/Space) skips to the end of the caption. Enter/Space also works for START and NEXT.
 - The `LOG` tab on the right slides out the in-world log entry for the room you're standing in.
-- The loading screen serves double duty: it buffers the upcoming room video for its full four
-  seconds, so the room is ready when the glitch lands.
+- A loading screen lasts as long as its clip: it ends on the video's own `ended` event, and the
+  progress bar tracks real playback rather than a timer. A watchdog (`LOAD_FALLBACK_MS`, plus
+  the clip's length once known) covers a clip that stalls or never reports a duration, so the
+  walk can't hang there.
+- The loading screen serves double duty: the upcoming room video buffers behind it, so the room
+  is ready when the glitch lands.
 - Each section owns one audio track. `0.mp3` runs under the home screen; a room's track starts
   with its loading clip and keeps playing through the glitch and the room itself, so the four
   seconds of loading and the room that follows are one continuous piece of sound.
-- The video clips keep their own audio underneath, at 20% volume (`VIDEO_VOLUME` in `script.js`).
+- The video clips are silent — the section track is the only sound. Muting them also keeps them
+  from taking the audio session on mobile, which is what used to cut the track off when a room
+  started. The track still reclaims playback if anything else pauses it (capped, and the sound
+  toggle always wins).
 - Browsers block audible playback until the visitor interacts with the page, so the site opens
   on a `CLICK ANYWHERE TO BEGIN` veil over the darkened title card. That one click (or keypress)
   is what lets `0.mp3` start; the veil then fades and leaves you on the home screen with START
   still to press. The `SOUND ON` toggle mutes and unmutes everything — section track and clip
   audio together.
 - `prefers-reduced-motion` swaps the glitch for a plain fade and prints captions instantly; the
-  four-second loading beat is kept either way.
+  loading screens still play in full either way.
