@@ -101,9 +101,10 @@
   ];
 
   const HOME_AUDIO = '0.mp3';  // plays on the title card
-  const VIDEO_VOLUME = 0.08;   // the clips' own sound, kept well under the section track
-
-  const LOAD_MS = 4000;        // loading screen duration before the glitch
+  // The loading screen runs for as long as its clip does; this only catches a
+  // clip that never reports a duration or stalls before it can end.
+  const LOAD_FALLBACK_MS = 8000;
+  const LOAD_SLACK_MS = 1500;  // grace after the clip's own length, if 'ended' misses
   const GLITCH_MS = 900;       // total glitch length
   const GLITCH_SWAP_MS = 320;  // when, inside the glitch, the screens swap
   const TYPE_START_DELAY_MS = 700;
@@ -144,7 +145,8 @@
   // --- Sound ------------------------------------------------------------------
   // One track per section: the home card gets 0.mp3, and each room's track
   // starts with its loading clip and carries through the glitch into the room.
-  // The clips keep their own sound underneath at VIDEO_VOLUME.
+  // The clips themselves are muted, so the track is the only thing that needs
+  // a gesture before it is allowed to start.
   const soundToggle = document.getElementById('soundToggle');
   let soundOn = true;
   let gestureArmed = false;
@@ -157,9 +159,6 @@
       document.removeEventListener('pointerdown', resume);
       document.removeEventListener('keydown', resume);
       playAudio();
-      [loadVideo, sceneVideo].forEach((v) => {
-        if (v.src && v.closest('.screen').classList.contains('is-active')) v.play().catch(() => {});
-      });
     };
     document.addEventListener('pointerdown', resume);
     document.addEventListener('keydown', resume);
@@ -192,11 +191,8 @@
   }
 
   function applySound() {
+    // The clips are always silent — the section track is the only sound here.
     sectionAudio.muted = !soundOn;
-    [loadVideo, sceneVideo].forEach((v) => {
-      v.muted = !soundOn;
-      v.volume = VIDEO_VOLUME;
-    });
     soundToggle.setAttribute('aria-pressed', String(soundOn));
     soundToggle.querySelector('.label').textContent = soundOn ? 'SOUND ON' : 'SOUND OFF';
   }
@@ -234,11 +230,13 @@
   let busy = false;          // true while loading/glitching, blocks double-clicks
   let typing = false;
   let typeTimeout = null;
+  let loadTimeout = null;
   let loadRaf = null;
   let glitchTimeouts = [];
 
   function clearPending() {
     if (typeTimeout) { clearTimeout(typeTimeout); typeTimeout = null; }
+    if (loadTimeout) { clearTimeout(loadTimeout); loadTimeout = null; }
     if (loadRaf) { cancelAnimationFrame(loadRaf); loadRaf = null; }
     glitchTimeouts.forEach(clearTimeout);
     glitchTimeouts = [];
@@ -382,34 +380,56 @@
 
     setSectionAudio(chapter.audio);
 
+    loadVideo.loop = false;          // it has to be able to end
     loadVideo.src = chapter.load;
     loadVideo.load();
-    loadVideo.muted = !soundOn;
-    loadVideo.volume = VIDEO_VOLUME;
-    loadVideo.play().catch(armGesture);
+    loadVideo.play().catch(() => {});
 
-    // The room video buffers behind the loading clip for the full four seconds.
+    // The room video buffers behind the loading clip while it plays.
     sceneVideo.src = chapter.video;
     sceneVideo.load();
 
     showScreen(screenLoad);
 
     const started = performance.now();
+    let finished = false;
+
+    function finish() {
+      if (finished) return;
+      finished = true;
+      loadVideo.removeEventListener('ended', finish);
+      loadVideo.removeEventListener('loadedmetadata', onMeta);
+      if (loadRaf) { cancelAnimationFrame(loadRaf); loadRaf = null; }
+      if (loadTimeout) { clearTimeout(loadTimeout); loadTimeout = null; }
+      loadBarFill.style.width = '100%';
+      loadPct.textContent = '100%';
+      done();
+    }
+
+    function onMeta() {
+      // Once the clip's length is known, let the watchdog run past it.
+      if (isFinite(loadVideo.duration) && loadVideo.duration > 0) {
+        if (loadTimeout) clearTimeout(loadTimeout);
+        loadTimeout = setTimeout(finish, loadVideo.duration * 1000 + LOAD_SLACK_MS);
+      }
+    }
+
+    loadVideo.addEventListener('ended', finish);
+    loadVideo.addEventListener('loadedmetadata', onMeta);
+    loadTimeout = setTimeout(finish, LOAD_FALLBACK_MS);
+
     function tick(now) {
-      const elapsed = now - started;
-      const linear = Math.min(1, elapsed / LOAD_MS);
+      // Track the clip itself; fall back to the clock until its length is known.
+      const known = isFinite(loadVideo.duration) && loadVideo.duration > 0;
+      const linear = known
+        ? Math.min(1, loadVideo.currentTime / loadVideo.duration)
+        : Math.min(1, (now - started) / LOAD_FALLBACK_MS);
       // Stutter the readout so it never climbs cleanly to 100.
       const jitter = linear < 1 ? (Math.random() - 0.5) * 0.04 : 0;
       const shown = Math.max(0, Math.min(1, linear + jitter));
       loadBarFill.style.width = (linear * 100).toFixed(1) + '%';
       loadPct.textContent = String(Math.round(shown * 100)).padStart(2, '0') + '%';
-      if (linear < 1) {
-        loadRaf = requestAnimationFrame(tick);
-      } else {
-        loadRaf = null;
-        loadPct.textContent = '100%';
-        done();
-      }
+      loadRaf = requestAnimationFrame(tick);
     }
     loadRaf = requestAnimationFrame(tick);
   }
@@ -434,9 +454,7 @@
     if (sceneVideo.src.indexOf(chapter.video) === -1) sceneVideo.src = chapter.video;
     // Safari throws if currentTime is set before any metadata has arrived.
     if (sceneVideo.readyState > 0) sceneVideo.currentTime = 0;
-    sceneVideo.muted = !soundOn;
-    sceneVideo.volume = VIDEO_VOLUME;
-    sceneVideo.play().catch(armGesture);
+    sceneVideo.play().catch(() => {});
 
     showScreen(screenScene);
     loadVideo.pause();
