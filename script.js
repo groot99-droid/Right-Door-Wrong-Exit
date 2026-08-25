@@ -11,7 +11,6 @@
       id: 'A',
       audio: 'A.mp3',
       rot: '-1.2deg',
-      phase: 'Phase 1 — The Departure from Reality',
       room: 'The Dining Room',
       epithet: 'The Anchor',
       load: 'a.MP4',
@@ -24,7 +23,6 @@
       id: 'B',
       audio: 'B.mp3',
       rot: '1.1deg',
-      phase: 'Phase 1 — The Departure from Reality',
       room: 'The Hallway',
       epithet: 'The Descent',
       load: 'b.MP4',
@@ -37,7 +35,6 @@
       id: 'C',
       audio: 'C.mp3',
       rot: '-0.8deg',
-      phase: 'Phase 2 — The Holding Cells',
       room: 'Teal Room, Square Door',
       epithet: 'The Glitch',
       load: 'c.MP4',
@@ -50,7 +47,6 @@
       id: 'D',
       audio: 'D.mp3',
       rot: '1.6deg',
-      phase: 'Phase 2 — The Holding Cells',
       room: 'Teal Room, Arched Door',
       epithet: 'The Mutation',
       load: 'd.MP4',
@@ -63,7 +59,6 @@
       id: 'E',
       audio: 'E.mp3',
       rot: '-1.5deg',
-      phase: 'Phase 3 — The System Breakdown',
       room: 'Flooded Corridor',
       epithet: 'The Decay',
       load: 'e.MP4',
@@ -76,7 +71,6 @@
       id: 'F',
       audio: 'F.mp3',
       rot: '0.9deg',
-      phase: 'Phase 4 — The Empty Expanse',
       room: 'Trampoline Park',
       epithet: 'The Macro-Structure',
       load: 'f.MP4',
@@ -89,7 +83,6 @@
       id: 'G',
       audio: 'G.mp3',
       rot: '-1.7deg',
-      phase: 'Phase 4 — The Empty Expanse',
       room: 'Grocery Store',
       epithet: 'The Anomaly',
       load: 'g.MP4',
@@ -101,15 +94,17 @@
   ];
 
   const HOME_AUDIO = '0.mp3';  // plays on the title card
-  // A loading screen runs until its clip ends. The guard below is measured from
-  // the last sign of playback progress, never from the wall clock: a clip that
-  // buffers slowly is still playing, and must not be cut off for taking longer
-  // than its own duration to get through.
+  // A loading screen shows exactly LOAD_SECONDS of its clip, counted in playback
+  // time rather than wall-clock: the count starts when the video actually starts,
+  // and buffering pauses it, so a slow clip is never cut short of its five
+  // seconds. The guards below only catch a clip that never plays at all.
+  const LOAD_SECONDS = 5.0;
   const LOAD_STALL_MS = 10000;  // no progress for this long means it is stuck
   const LOAD_CAP_MS = 60000;    // last-resort ceiling so the walk can never hang
   const GLITCH_MS = 900;       // total glitch length
   const GLITCH_SWAP_MS = 320;  // when, inside the glitch, the screens swap
   const TYPE_START_DELAY_MS = 700;
+  const CAPTION_HOLD_MS = 5000;  // the card clears this long after it finishes typing
 
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -126,7 +121,6 @@
   const sceneVideo = document.getElementById('sceneVideo');
   const sceneTitleTop = document.getElementById('sceneTitleTop');
   const sceneTitleBottom = document.getElementById('sceneTitleBottom');
-  const scenePhase = document.getElementById('scenePhase');
   const captionCard = document.getElementById('captionCard');
   const typedText = document.getElementById('typedText');
   const nextBtn = document.getElementById('nextBtn');
@@ -228,12 +222,14 @@
   let busy = false;          // true while loading/glitching, blocks double-clicks
   let typing = false;
   let typeTimeout = null;
+  let holdTimeout = null;
   let cancelLoader = null;   // tears down the in-flight loading screen
   let glitchTimeouts = [];
   let warmClip = null;       // held so the prefetch is not garbage collected
 
   function clearPending() {
     if (typeTimeout) { clearTimeout(typeTimeout); typeTimeout = null; }
+    if (holdTimeout) { clearTimeout(holdTimeout); holdTimeout = null; }
     if (cancelLoader) { cancelLoader(); cancelLoader = null; }
     glitchTimeouts.forEach(clearTimeout);
     glitchTimeouts = [];
@@ -301,6 +297,12 @@
     if (typeTimeout) { clearTimeout(typeTimeout); typeTimeout = null; }
     typedText.textContent = chapter.caption;
     revealNext();
+    // The card has been read by now; let the room stand on its own.
+    if (holdTimeout) clearTimeout(holdTimeout);
+    holdTimeout = setTimeout(() => {
+      captionCard.classList.remove('visible');
+      holdTimeout = null;
+    }, CAPTION_HOLD_MS);
   }
 
   function typeCaption(chapter) {
@@ -371,19 +373,22 @@
   // --- Loading screen --------------------------------------------------------
   function runLoader(chapter, done) {
     setSectionAudio(chapter.audio);
+    body.className = 'phase-load' + (body.classList.contains('notes-open') ? ' notes-open' : '');
 
     let finished = false;
     let stallTimer = null;
     let capTimer = null;
+    let cutTimer = null;
     let roomQueued = false;
 
     function teardown() {
       loadVideo.removeEventListener('ended', finish);
       loadVideo.removeEventListener('timeupdate', onProgress);
       loadVideo.removeEventListener('playing', onPlaying);
+      loadVideo.removeEventListener('waiting', onWaiting);
       loadVideo.removeEventListener('error', finish);
-      if (stallTimer) { clearTimeout(stallTimer); stallTimer = null; }
-      if (capTimer) { clearTimeout(capTimer); capTimer = null; }
+      [stallTimer, capTimer, cutTimer].forEach((t) => t && clearTimeout(t));
+      stallTimer = capTimer = cutTimer = null;
       cancelLoader = null;
     }
 
@@ -394,27 +399,47 @@
       done();
     }
 
-    // Every sign of progress buys the clip another window. Only a clip that has
-    // genuinely stopped moving gets cut off.
+    // Guards only: any sign of progress buys the clip another window, so a clip
+    // that buffers is never mistaken for one that is stuck.
     function armStall() {
       if (stallTimer) clearTimeout(stallTimer);
       stallTimer = setTimeout(finish, LOAD_STALL_MS);
     }
 
-    function onProgress() { armStall(); }
+    // The cut is scheduled from where playback actually is, so it lands on
+    // LOAD_SECONDS of video however long the clip took to get there.
+    function armCut() {
+      if (cutTimer) clearTimeout(cutTimer);
+      const remaining = (LOAD_SECONDS - loadVideo.currentTime) * 1000;
+      cutTimer = setTimeout(finish, Math.max(0, remaining));
+    }
+
+    function onProgress() {
+      armStall();
+      if (loadVideo.currentTime >= LOAD_SECONDS) { finish(); return; }
+      // Re-aim the cut from where playback actually is, so it converges on
+      // LOAD_SECONDS instead of drifting with however the clip decodes.
+      if (cutTimer) armCut();
+    }
+
+    function onWaiting() {
+      // Buffering: hold the count until the picture moves again.
+      if (cutTimer) { clearTimeout(cutTimer); cutTimer = null; }
+    }
 
     function onPlaying() {
       armStall();
+      armCut();
       // Only start pulling the room video once the loading clip is actually
       // running, so the two are not competing for the connection while the
-      // loading screen is the thing on screen.
+      // loading screen is what is on screen.
       if (roomQueued) return;
       roomQueued = true;
       sceneVideo.src = chapter.video;
       sceneVideo.load();
     }
 
-    loadVideo.loop = false;          // it has to be able to end
+    loadVideo.loop = false;
     loadVideo.muted = true;          // the section track is the only sound
     loadVideo.src = chapter.load;
     loadVideo.load();
@@ -422,6 +447,7 @@
     loadVideo.addEventListener('ended', finish);
     loadVideo.addEventListener('timeupdate', onProgress);
     loadVideo.addEventListener('playing', onPlaying);
+    loadVideo.addEventListener('waiting', onWaiting);
     loadVideo.addEventListener('error', finish);
 
     armStall();
@@ -443,7 +469,6 @@
     captionCard.style.setProperty('--rot', chapter.rot);
     sceneTitleTop.textContent = chapter.room;
     buildFlicker(sceneTitleBottom, chapter.epithet);
-    scenePhase.textContent = chapter.phase.split('—')[0].trim().toUpperCase();
 
     setLog(chapter);
     hideNext();

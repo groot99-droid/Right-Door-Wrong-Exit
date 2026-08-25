@@ -150,6 +150,24 @@ body {
 }
 
 /* ==========================================================================
+   Loading screen — the clip and nothing else
+   ========================================================================== */
+
+/* No scanlines, no vignette, no chrome: while a loading clip is up the frame
+   holds the video alone. */
+body.phase-load .stage::before,
+body.phase-load .screen-load::after,
+body.phase-load .sound-toggle,
+body.phase-load .notes-tab-handle,
+body.phase-load .notes-panel {
+  display: none;
+}
+
+body.phase-load .screen-load video {
+  transform: none;          /* no crop-scale either */
+}
+
+/* ==========================================================================
    Scene (room) screen
    ========================================================================== */
 
@@ -193,13 +211,6 @@ body {
   animation: letterBurst 0.5s ease-out 1;
 }
 
-.reel-phase {
-  margin-top: 0.7rem;
-  font-size: 0.78rem;
-  letter-spacing: 0.2em;
-  opacity: 0.8;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.85);
-}
 
 .center-card {
   position: absolute;
