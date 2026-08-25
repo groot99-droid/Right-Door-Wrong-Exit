@@ -149,65 +149,6 @@ body {
   background: linear-gradient(to bottom, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.35) 45%, rgba(0, 0, 0, 0.75));
 }
 
-.load-ui {
-  position: absolute;
-  z-index: 5;
-  left: 50%;
-  bottom: 12vh;
-  transform: translateX(-50%);
-  width: min(520px, 78vw);
-  text-align: center;
-}
-
-.load-phase {
-  font-size: clamp(0.55rem, 1.5vw, 0.7rem);
-  letter-spacing: 0.3em;
-  opacity: 0.6;
-  margin-bottom: 0.9rem;
-  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9);
-}
-
-.load-label {
-  font-size: clamp(0.8rem, 2.2vw, 1.05rem);
-  letter-spacing: 0.34em;
-  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.95);
-  margin-bottom: 1.1rem;
-  animation: loadBlink 1.6s steps(1) infinite;
-}
-
-@keyframes loadBlink {
-  0%, 78%  { opacity: 1; }
-  80%, 86% { opacity: 0.45; }
-  88%, 100% { opacity: 1; }
-}
-
-.load-bar {
-  height: 6px;
-  width: 100%;
-  border: 1px solid rgba(255, 183, 3, 0.5);
-  background: rgba(0, 0, 0, 0.5);
-  overflow: hidden;
-}
-
-.load-bar-fill {
-  height: 100%;
-  width: 0%;
-  background: repeating-linear-gradient(
-    to right,
-    #ffb703 0px, #ffb703 6px,
-    rgba(255, 183, 3, 0.45) 6px, rgba(255, 183, 3, 0.45) 10px
-  );
-  box-shadow: 0 0 12px rgba(255, 183, 3, 0.55);
-}
-
-.load-pct {
-  margin-top: 0.7rem;
-  font-size: 0.75rem;
-  letter-spacing: 0.24em;
-  opacity: 0.8;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9);
-}
-
 /* ==========================================================================
    Scene (room) screen
    ========================================================================== */
@@ -635,7 +576,6 @@ body.notes-open .notes-tab-handle { right: min(33vw, 420px); }
   .next-btn { transition: opacity 0.3s ease; }
   .screen-home .home-bg,
   .start-btn,
-  .load-label,
   .next-btn .next-arrow,
   .reel-title-bottom .letter { animation: none; }
   .cursor { animation: none; opacity: 1; }
@@ -673,7 +613,6 @@ body.notes-open .notes-tab-handle { right: min(33vw, 420px); }
 
   .reel-header { top: 10vh; }
   .next-btn { bottom: 6vh; padding: 0.8rem 1.5rem; }
-  .load-ui { bottom: 10vh; }
   .notes-tab-handle {
     top: auto;
     bottom: 16vh;

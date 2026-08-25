@@ -2,7 +2,8 @@
 
 A single-page, click-through liminal-space walkthrough in the backrooms genre. It opens on an
 arcade-cabinet title card with a **START** button; starting the walk drops you into a loading
-screen that plays its clip all the way through and then glitches into the first room. Each room plays a looping video behind a
+screen — the clip alone, no overlay — that plays all the way through and then glitches into the
+first room. Each room plays a looping video behind a
 typewritten caption, and once the caption finishes typing a **NEXT** button appears — clicking it
 runs the next loading screen, the next glitch, the next room. Seven rooms later the loop returns
 you to the title card.
@@ -62,17 +63,20 @@ Then open `http://localhost:8080/index.html`.
 - Captions type themselves out character by character; clicking the paper card (or pressing
   Enter/Space) skips to the end of the caption. Enter/Space also works for START and NEXT.
 - The `LOG` tab on the right slides out the in-world log entry for the room you're standing in.
-- A loading screen lasts as long as its clip: it ends on the video's own `ended` event, and the
-  progress bar tracks real playback rather than a timer. A watchdog (`LOAD_FALLBACK_MS`, plus
-  the clip's length once known) covers a clip that stalls or never reports a duration, so the
-  walk can't hang there.
-- The loading screen serves double duty: the upcoming room video buffers behind it, so the room
-  is ready when the glitch lands.
+- A loading screen is just its clip, and lasts exactly as long as the clip does: it ends on the
+  video's own `ended` event. The guard against a stuck clip (`LOAD_STALL_MS`) is measured from
+  the last sign of playback progress, never from the wall clock — a clip that buffers slowly is
+  still playing and must not be cut off for taking longer than its own duration to get through.
+  `LOAD_CAP_MS` is a last-resort ceiling.
+- The upcoming room video only starts downloading once the loading clip is actually playing, so
+  the two aren't competing for the connection while the loading screen is what's on screen. The
+  next room's loading clip is prefetched while you read the current room.
 - Each section owns one audio track. `0.mp3` runs under the home screen; a room's track starts
   with its loading clip and keeps playing through the glitch and the room itself, so the four
   seconds of loading and the room that follows are one continuous piece of sound.
-- The video clips are silent — the section track is the only sound. Muting them also keeps them
-  from taking the audio session on mobile, which is what used to cut the track off when a room
+- The video clips are silent — muted in the markup and again in `script.js`, with nothing that
+  ever unmutes them. The section track is the only sound. Muting them also keeps them from
+  taking the audio session on mobile, which is what used to cut the track off when a room
   started. The track still reclaims playback if anything else pauses it (capped, and the sound
   toggle always wins).
 - Browsers block audible playback until the visitor interacts with the page, so the site opens
