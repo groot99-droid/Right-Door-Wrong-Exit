@@ -2,7 +2,7 @@
 
 A single-page, click-through liminal-space walkthrough in the backrooms genre. It opens on an
 arcade-cabinet title card with a **START** button; starting the walk drops you into a loading
-screen — the clip alone, no overlay — that plays all the way through and then glitches into the
+screen — the clip alone, no overlay — that runs for five seconds and then glitches into the
 first room. Each room plays a looping video behind a
 typewritten caption, and once the caption finishes typing a **NEXT** button appears — clicking it
 runs the next loading screen, the next glitch, the next room. Seven rooms later the loop returns
@@ -62,12 +62,16 @@ Then open `http://localhost:8080/index.html`.
   files through GitHub, or rename them before cloning locally.
 - Captions type themselves out character by character; clicking the paper card (or pressing
   Enter/Space) skips to the end of the caption. Enter/Space also works for START and NEXT.
+- `CAPTION_HOLD_MS` after a caption finishes typing, the card fades out and leaves the room on
+  its own. NEXT stays put.
 - The `LOG` tab on the right slides out the in-world log entry for the room you're standing in.
-- A loading screen is just its clip, and lasts exactly as long as the clip does: it ends on the
-  video's own `ended` event. The guard against a stuck clip (`LOAD_STALL_MS`) is measured from
-  the last sign of playback progress, never from the wall clock — a clip that buffers slowly is
-  still playing and must not be cut off for taking longer than its own duration to get through.
-  `LOAD_CAP_MS` is a last-resort ceiling.
+- A loading screen is the clip and nothing else: while `body.phase-load` is set, the scanline
+  overlay, the vignette, the sound toggle and the LOG tab are all hidden, and the video isn't
+  crop-scaled.
+- It shows exactly `LOAD_SECONDS` (5.0) of clip, counted in playback time, not wall-clock: the
+  count starts when the video actually starts and pauses while it buffers, so a slow clip still
+  gets its full five seconds. `LOAD_STALL_MS` and `LOAD_CAP_MS` only catch a clip that never
+  plays at all.
 - The upcoming room video only starts downloading once the loading clip is actually playing, so
   the two aren't competing for the connection while the loading screen is what's on screen. The
   next room's loading clip is prefetched while you read the current room.

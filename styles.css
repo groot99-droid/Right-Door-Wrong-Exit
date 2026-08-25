@@ -150,6 +150,24 @@ body {
 }
 
 /* ==========================================================================
+   Loading screen — the clip and nothing else
+   ========================================================================== */
+
+/* No scanlines, no vignette, no chrome: while a loading clip is up the frame
+   holds the video alone. */
+body.phase-load .stage::before,
+body.phase-load .screen-load::after,
+body.phase-load .sound-toggle,
+body.phase-load .notes-tab-handle,
+body.phase-load .notes-panel {
+  display: none;
+}
+
+body.phase-load .screen-load video {
+  transform: none;          /* no crop-scale either */
+}
+
+/* ==========================================================================
    Scene (room) screen
    ========================================================================== */
 
