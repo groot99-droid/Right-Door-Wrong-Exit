@@ -70,8 +70,13 @@ Then open `http://localhost:8080/index.html`.
   crop-scaled.
 - It shows exactly `LOAD_SECONDS` (5.0) of clip, counted in playback time, not wall-clock: the
   count starts when the video actually starts and pauses while it buffers, so a slow clip still
-  gets its full five seconds. `LOAD_STALL_MS` and `LOAD_CAP_MS` only catch a clip that never
-  plays at all.
+  gets its full five seconds. Three ceilings sit behind it so a loading screen can never hang:
+  `LOAD_START_MS` (the clip never got going), `LOAD_STALL_MS` (the picture stopped moving) and
+  `LOAD_CAP_MS` (absolute). The stall guard re-arms only on a real advance in `currentTime` — a
+  `timeupdate` on its own is not proof of progress, since a stalled clip keeps firing them with
+  the picture frozen.
+- A white **SKIP** tab sits where the LOG tab does, but only while a clip is loading, so a slow
+  or broken clip is never a dead end.
 - The upcoming room video only starts downloading once the loading clip is actually playing, so
   the two aren't competing for the connection while the loading screen is what's on screen. The
   next room's loading clip is prefetched while you read the current room.
