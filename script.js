@@ -11,7 +11,6 @@
       id: 'A',
       audio: 'A.mp3',
       rot: '-1.2deg',
-      phase: 'Phase 1 — The Departure from Reality',
       room: 'The Dining Room',
       epithet: 'The Anchor',
       load: 'a.MP4',
@@ -24,7 +23,6 @@
       id: 'B',
       audio: 'B.mp3',
       rot: '1.1deg',
-      phase: 'Phase 1 — The Departure from Reality',
       room: 'The Hallway',
       epithet: 'The Descent',
       load: 'b.MP4',
@@ -37,7 +35,6 @@
       id: 'C',
       audio: 'C.mp3',
       rot: '-0.8deg',
-      phase: 'Phase 2 — The Holding Cells',
       room: 'Teal Room, Square Door',
       epithet: 'The Glitch',
       load: 'c.MP4',
@@ -50,7 +47,6 @@
       id: 'D',
       audio: 'D.mp3',
       rot: '1.6deg',
-      phase: 'Phase 2 — The Holding Cells',
       room: 'Teal Room, Arched Door',
       epithet: 'The Mutation',
       load: 'd.MP4',
@@ -63,7 +59,6 @@
       id: 'E',
       audio: 'E.mp3',
       rot: '-1.5deg',
-      phase: 'Phase 3 — The System Breakdown',
       room: 'Flooded Corridor',
       epithet: 'The Decay',
       load: 'e.MP4',
@@ -76,7 +71,6 @@
       id: 'F',
       audio: 'F.mp3',
       rot: '0.9deg',
-      phase: 'Phase 4 — The Empty Expanse',
       room: 'Trampoline Park',
       epithet: 'The Macro-Structure',
       load: 'f.MP4',
@@ -89,7 +83,6 @@
       id: 'G',
       audio: 'G.mp3',
       rot: '-1.7deg',
-      phase: 'Phase 4 — The Empty Expanse',
       room: 'Grocery Store',
       epithet: 'The Anomaly',
       load: 'g.MP4',
@@ -128,7 +121,6 @@
   const sceneVideo = document.getElementById('sceneVideo');
   const sceneTitleTop = document.getElementById('sceneTitleTop');
   const sceneTitleBottom = document.getElementById('sceneTitleBottom');
-  const scenePhase = document.getElementById('scenePhase');
   const captionCard = document.getElementById('captionCard');
   const typedText = document.getElementById('typedText');
   const nextBtn = document.getElementById('nextBtn');
@@ -477,7 +469,6 @@
     captionCard.style.setProperty('--rot', chapter.rot);
     sceneTitleTop.textContent = chapter.room;
     buildFlicker(sceneTitleBottom, chapter.epithet);
-    scenePhase.textContent = chapter.phase.split('—')[0].trim().toUpperCase();
 
     setLog(chapter);
     hideNext();
