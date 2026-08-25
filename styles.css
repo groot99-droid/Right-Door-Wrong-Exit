@@ -163,6 +163,43 @@ body.phase-load .notes-panel {
   display: none;
 }
 
+/* SKIP takes the LOG tab's place, and only while a clip is loading. */
+.skip-tab-handle {
+  display: none;
+  position: fixed;
+  top: calc(50% - 65px);
+  right: 0;
+  width: 46px;
+  height: 130px;
+  z-index: 70;
+  clip-path: polygon(0% 12%, 100% 0%, 100% 100%, 0% 88%);
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-right: none;
+  color: #111;
+  font-family: "Share Tech Mono", "Courier New", monospace;
+  font-weight: 700;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  writing-mode: vertical-rl;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: -2px 2px 10px rgba(0, 0, 0, 0.45);
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+body.phase-load .skip-tab-handle {
+  display: flex;
+}
+
+.skip-tab-handle:hover,
+.skip-tab-handle:focus-visible {
+  background: #ffb703;
+  color: #1a1712;
+  outline: none;
+}
+
 body.phase-load .screen-load video {
   transform: none;          /* no crop-scale either */
 }
@@ -624,7 +661,8 @@ body.notes-open .notes-tab-handle { right: min(33vw, 420px); }
 
   .reel-header { top: 10vh; }
   .next-btn { bottom: 6vh; padding: 0.8rem 1.5rem; }
-  .notes-tab-handle {
+  .notes-tab-handle,
+  .skip-tab-handle {
     top: auto;
     bottom: 16vh;
     width: 38px;

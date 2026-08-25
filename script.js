@@ -99,8 +99,9 @@
   // and buffering pauses it, so a slow clip is never cut short of its five
   // seconds. The guards below only catch a clip that never plays at all.
   const LOAD_SECONDS = 5.0;
-  const LOAD_STALL_MS = 10000;  // no progress for this long means it is stuck
-  const LOAD_CAP_MS = 60000;    // last-resort ceiling so the walk can never hang
+  const LOAD_STALL_MS = 6000;   // no PICTURE MOVEMENT for this long means it is stuck
+  const LOAD_START_MS = 6000;   // never got going at all
+  const LOAD_CAP_MS = 15000;    // last-resort ceiling so the walk can never hang
   const GLITCH_MS = 900;       // total glitch length
   const GLITCH_SWAP_MS = 320;  // when, inside the glitch, the screens swap
   const TYPE_START_DELAY_MS = 700;
@@ -205,6 +206,9 @@
     playAudio();
   }
 
+  const skipBtn = document.getElementById('skipBtn');
+  skipBtn.addEventListener('click', () => { if (skipLoader) skipLoader(); });
+
   gate.addEventListener('click', openGate);
   document.addEventListener('keydown', openGate);
 
@@ -224,6 +228,7 @@
   let typeTimeout = null;
   let holdTimeout = null;
   let cancelLoader = null;   // tears down the in-flight loading screen
+  let skipLoader = null;     // ends it early and moves on to the room
   let glitchTimeouts = [];
   let warmClip = null;       // held so the prefetch is not garbage collected
 
@@ -380,6 +385,7 @@
     let capTimer = null;
     let cutTimer = null;
     let roomQueued = false;
+    let lastTime = 0;
 
     function teardown() {
       loadVideo.removeEventListener('ended', finish);
@@ -390,6 +396,7 @@
       [stallTimer, capTimer, cutTimer].forEach((t) => t && clearTimeout(t));
       stallTimer = capTimer = cutTimer = null;
       cancelLoader = null;
+      skipLoader = null;
     }
 
     function finish() {
@@ -406,6 +413,15 @@
       stallTimer = setTimeout(finish, LOAD_STALL_MS);
     }
 
+    // A timeupdate is not proof of progress: a stalled clip can keep firing them
+    // with currentTime frozen. Only an actual advance counts, otherwise the
+    // guard re-arms forever and the loading screen hangs.
+    function progressed() {
+      const t = loadVideo.currentTime;
+      if (t > lastTime + 0.01) { lastTime = t; return true; }
+      return false;
+    }
+
     // The cut is scheduled from where playback actually is, so it lands on
     // LOAD_SECONDS of video however long the clip took to get there.
     function armCut() {
@@ -415,11 +431,13 @@
     }
 
     function onProgress() {
+      if (!progressed()) return;          // frozen picture: let the guard run out
       armStall();
       if (loadVideo.currentTime >= LOAD_SECONDS) { finish(); return; }
       // Re-aim the cut from where playback actually is, so it converges on
-      // LOAD_SECONDS instead of drifting with however the clip decodes.
-      if (cutTimer) armCut();
+      // LOAD_SECONDS instead of drifting with however the clip decodes. If a
+      // stall cleared it, put it back now that the picture is moving again.
+      armCut();
     }
 
     function onWaiting() {
@@ -450,9 +468,11 @@
     loadVideo.addEventListener('waiting', onWaiting);
     loadVideo.addEventListener('error', finish);
 
-    armStall();
+    // Two separate ceilings: one for a clip that never starts, one absolute.
+    stallTimer = setTimeout(finish, LOAD_START_MS);
     capTimer = setTimeout(finish, LOAD_CAP_MS);
     cancelLoader = () => { finished = true; teardown(); };
+    skipLoader = finish;
 
     showScreen(screenLoad);
     loadVideo.play().catch(() => {});
