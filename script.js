@@ -101,10 +101,12 @@
   ];
 
   const HOME_AUDIO = '0.mp3';  // plays on the title card
-  // The loading screen runs for as long as its clip does; this only catches a
-  // clip that never reports a duration or stalls before it can end.
-  const LOAD_FALLBACK_MS = 8000;
-  const LOAD_SLACK_MS = 1500;  // grace after the clip's own length, if 'ended' misses
+  // A loading screen runs until its clip ends. The guard below is measured from
+  // the last sign of playback progress, never from the wall clock: a clip that
+  // buffers slowly is still playing, and must not be cut off for taking longer
+  // than its own duration to get through.
+  const LOAD_STALL_MS = 10000;  // no progress for this long means it is stuck
+  const LOAD_CAP_MS = 60000;    // last-resort ceiling so the walk can never hang
   const GLITCH_MS = 900;       // total glitch length
   const GLITCH_SWAP_MS = 320;  // when, inside the glitch, the screens swap
   const TYPE_START_DELAY_MS = 700;
@@ -120,10 +122,6 @@
 
   const startBtn = document.getElementById('startBtn');
   const loadVideo = document.getElementById('loadVideo');
-  const loadPhase = document.getElementById('loadPhase');
-  const loadLabel = document.getElementById('loadLabel');
-  const loadBarFill = document.getElementById('loadBarFill');
-  const loadPct = document.getElementById('loadPct');
 
   const sceneVideo = document.getElementById('sceneVideo');
   const sceneTitleTop = document.getElementById('sceneTitleTop');
@@ -230,14 +228,13 @@
   let busy = false;          // true while loading/glitching, blocks double-clicks
   let typing = false;
   let typeTimeout = null;
-  let loadTimeout = null;
-  let loadRaf = null;
+  let cancelLoader = null;   // tears down the in-flight loading screen
   let glitchTimeouts = [];
+  let warmClip = null;       // held so the prefetch is not garbage collected
 
   function clearPending() {
     if (typeTimeout) { clearTimeout(typeTimeout); typeTimeout = null; }
-    if (loadTimeout) { clearTimeout(loadTimeout); loadTimeout = null; }
-    if (loadRaf) { cancelAnimationFrame(loadRaf); loadRaf = null; }
+    if (cancelLoader) { cancelLoader(); cancelLoader = null; }
     glitchTimeouts.forEach(clearTimeout);
     glitchTimeouts = [];
   }
@@ -373,65 +370,66 @@
 
   // --- Loading screen --------------------------------------------------------
   function runLoader(chapter, done) {
-    loadPhase.textContent = chapter.phase.toUpperCase();
-    loadLabel.textContent = 'LOADING ROOM ' + chapter.id;
-    loadPct.textContent = '00%';
-    loadBarFill.style.width = '0%';
-
     setSectionAudio(chapter.audio);
 
-    loadVideo.loop = false;          // it has to be able to end
-    loadVideo.src = chapter.load;
-    loadVideo.load();
-    loadVideo.play().catch(() => {});
-
-    // The room video buffers behind the loading clip while it plays.
-    sceneVideo.src = chapter.video;
-    sceneVideo.load();
-
-    showScreen(screenLoad);
-
-    const started = performance.now();
     let finished = false;
+    let stallTimer = null;
+    let capTimer = null;
+    let roomQueued = false;
+
+    function teardown() {
+      loadVideo.removeEventListener('ended', finish);
+      loadVideo.removeEventListener('timeupdate', onProgress);
+      loadVideo.removeEventListener('playing', onPlaying);
+      loadVideo.removeEventListener('error', finish);
+      if (stallTimer) { clearTimeout(stallTimer); stallTimer = null; }
+      if (capTimer) { clearTimeout(capTimer); capTimer = null; }
+      cancelLoader = null;
+    }
 
     function finish() {
       if (finished) return;
       finished = true;
-      loadVideo.removeEventListener('ended', finish);
-      loadVideo.removeEventListener('loadedmetadata', onMeta);
-      if (loadRaf) { cancelAnimationFrame(loadRaf); loadRaf = null; }
-      if (loadTimeout) { clearTimeout(loadTimeout); loadTimeout = null; }
-      loadBarFill.style.width = '100%';
-      loadPct.textContent = '100%';
+      teardown();
       done();
     }
 
-    function onMeta() {
-      // Once the clip's length is known, let the watchdog run past it.
-      if (isFinite(loadVideo.duration) && loadVideo.duration > 0) {
-        if (loadTimeout) clearTimeout(loadTimeout);
-        loadTimeout = setTimeout(finish, loadVideo.duration * 1000 + LOAD_SLACK_MS);
-      }
+    // Every sign of progress buys the clip another window. Only a clip that has
+    // genuinely stopped moving gets cut off.
+    function armStall() {
+      if (stallTimer) clearTimeout(stallTimer);
+      stallTimer = setTimeout(finish, LOAD_STALL_MS);
     }
+
+    function onProgress() { armStall(); }
+
+    function onPlaying() {
+      armStall();
+      // Only start pulling the room video once the loading clip is actually
+      // running, so the two are not competing for the connection while the
+      // loading screen is the thing on screen.
+      if (roomQueued) return;
+      roomQueued = true;
+      sceneVideo.src = chapter.video;
+      sceneVideo.load();
+    }
+
+    loadVideo.loop = false;          // it has to be able to end
+    loadVideo.muted = true;          // the section track is the only sound
+    loadVideo.src = chapter.load;
+    loadVideo.load();
 
     loadVideo.addEventListener('ended', finish);
-    loadVideo.addEventListener('loadedmetadata', onMeta);
-    loadTimeout = setTimeout(finish, LOAD_FALLBACK_MS);
+    loadVideo.addEventListener('timeupdate', onProgress);
+    loadVideo.addEventListener('playing', onPlaying);
+    loadVideo.addEventListener('error', finish);
 
-    function tick(now) {
-      // Track the clip itself; fall back to the clock until its length is known.
-      const known = isFinite(loadVideo.duration) && loadVideo.duration > 0;
-      const linear = known
-        ? Math.min(1, loadVideo.currentTime / loadVideo.duration)
-        : Math.min(1, (now - started) / LOAD_FALLBACK_MS);
-      // Stutter the readout so it never climbs cleanly to 100.
-      const jitter = linear < 1 ? (Math.random() - 0.5) * 0.04 : 0;
-      const shown = Math.max(0, Math.min(1, linear + jitter));
-      loadBarFill.style.width = (linear * 100).toFixed(1) + '%';
-      loadPct.textContent = String(Math.round(shown * 100)).padStart(2, '0') + '%';
-      loadRaf = requestAnimationFrame(tick);
-    }
-    loadRaf = requestAnimationFrame(tick);
+    armStall();
+    capTimer = setTimeout(finish, LOAD_CAP_MS);
+    cancelLoader = () => { finished = true; teardown(); };
+
+    showScreen(screenLoad);
+    loadVideo.play().catch(() => {});
   }
 
   // --- Chapter screen --------------------------------------------------------
@@ -452,6 +450,7 @@
     typedText.textContent = '';
 
     if (sceneVideo.src.indexOf(chapter.video) === -1) sceneVideo.src = chapter.video;
+    sceneVideo.muted = true;         // the section track is the only sound
     // Safari throws if currentTime is set before any metadata has arrived.
     if (sceneVideo.readyState > 0) sceneVideo.currentTime = 0;
     sceneVideo.play().catch(() => {});
@@ -469,10 +468,10 @@
     // Warm up the next loading clip while this room is being read.
     const next = CHAPTERS[i + 1];
     if (next) {
-      const warm = document.createElement('video');
-      warm.preload = 'auto';
-      warm.muted = true;
-      warm.src = next.load;
+      warmClip = document.createElement('video');
+      warmClip.preload = 'auto';
+      warmClip.muted = true;
+      warmClip.src = next.load;
     }
   }
 
