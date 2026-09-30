@@ -7,6 +7,14 @@
 <meta name="description" content="A looping liminal-space walkthrough: seven rooms, seven loading screens, no exit." />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23000'/%3E%3Crect x='9' y='5' width='14' height='22' fill='none' stroke='%23ffb703' stroke-width='2'/%3E%3Ccircle cx='19' cy='16' r='1.6' fill='%23ffb703'/%3E%3C/svg%3E" />
 <link rel="stylesheet" href="styles.css" />
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three/build/three.module.js",
+    "three/addons/": "./vendor/three/examples/jsm/"
+  }
+}
+</script>
 </head>
 <body class="phase-home">
 
@@ -62,6 +70,15 @@
       <span class="next-label" id="nextLabel">NEXT</span>
       <span class="next-arrow" id="nextArrow">&rarr;</span>
     </button>
+  </section>
+
+  <!-- ============ WALK (3D) ============ -->
+  <section class="screen screen-walk" id="screenWalk" aria-hidden="true">
+    <div class="walk-mount" id="walkMount"></div>
+    <div class="walk-objective" id="walkObjective"></div>
+    <div class="walk-hint" id="walkHint"></div>
+    <div class="walk-joystick" id="walkJoystick" aria-hidden="true"><div class="knob"></div></div>
+    <div class="walk-fade" id="walkFade"></div>
   </section>
 
   <div class="glitch-veil" id="glitchVeil" aria-hidden="true">

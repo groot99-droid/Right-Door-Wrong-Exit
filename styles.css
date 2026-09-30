@@ -340,6 +340,127 @@ body.phase-load .screen-load video {
 }
 
 /* ==========================================================================
+   Walk screen — the 3D room between a caption and the next loading screen
+   ========================================================================== */
+
+.screen-walk { background: #000; }
+
+.walk-mount {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.walk-mount .walk-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  outline: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* the room is lit by its own lamps: keep the vignette, lose most of it */
+.screen-walk::after {
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.22) 0%, rgba(0, 0, 0, 0) 22%, rgba(0, 0, 0, 0) 70%, rgba(0, 0, 0, 0.3) 100%);
+}
+
+.walk-objective {
+  position: absolute;
+  z-index: 5;
+  top: 7vh;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-family: "Oswald", "Arial Narrow", Impact, sans-serif;
+  font-weight: 700;
+  font-size: clamp(1.1rem, 3.2vw, 2rem);
+  letter-spacing: 0.22em;
+  text-indent: 0.22em;
+  color: #ffb703;
+  text-shadow: 0 4px 14px rgba(0, 0, 0, 0.85), 0 1px 3px rgba(0, 0, 0, 0.95);
+  pointer-events: none;
+  animation: tubeFlicker 9s infinite;
+}
+
+.walk-objective.near {
+  color: #fff1c4;
+  animation: objectivePulse 1.2s ease-in-out infinite;
+}
+
+@keyframes objectivePulse {
+  0%, 100% { opacity: 1; text-shadow: 0 0 18px rgba(255, 183, 3, 0.5), 0 2px 8px rgba(0, 0, 0, 0.9); }
+  50%      { opacity: 0.6; text-shadow: 0 0 4px rgba(255, 183, 3, 0.2), 0 2px 8px rgba(0, 0, 0, 0.9); }
+}
+
+.walk-hint {
+  position: absolute;
+  z-index: 5;
+  left: 0;
+  right: 0;
+  bottom: 7vh;
+  text-align: center;
+  font-family: "Share Tech Mono", "Courier New", monospace;
+  font-size: clamp(0.62rem, 1.7vw, 0.82rem);
+  letter-spacing: 0.28em;
+  text-indent: 0.28em;
+  color: rgba(255, 183, 3, 0.85);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.95);
+  white-space: pre;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.9s ease;
+}
+
+.walk-hint.visible { opacity: 1; }
+
+/* thumb joystick: appears where the left thumb lands */
+.walk-joystick {
+  position: absolute;
+  z-index: 6;
+  width: 104px;
+  height: 104px;
+  margin: -52px 0 0 -52px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 183, 3, 0.45);
+  background: rgba(0, 0, 0, 0.28);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.walk-joystick.visible { opacity: 1; }
+
+.walk-joystick .knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255, 183, 3, 0.55);
+  box-shadow: 0 0 12px rgba(255, 183, 3, 0.35);
+  transform: translate(-50%, -50%);
+}
+
+.walk-fade {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.walk-fade.soft { transition: opacity 0.7s ease; }
+
+/* SKIP is offered during a walk too, so a room is never a dead end. */
+body.phase-walk .skip-tab-handle { display: flex; }
+body.phase-walk .notes-tab-handle { display: none; }
+
+/* ==========================================================================
    Glitch transition
    ========================================================================== */
 

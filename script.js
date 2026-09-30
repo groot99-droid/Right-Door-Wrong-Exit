@@ -5,6 +5,9 @@
   // Chapters. Each entry pairs a loading clip (lowercase file) with the room
   // video it glitches into (uppercase file), plus its caption and log entry.
   // Filenames are case-sensitive and intentionally match the uploaded assets.
+  // `walk` names the 3D scene (walk/scenes/<id>.js) the player has to cross
+  // after NEXT before the next loading screen plays; a chapter without one goes
+  // straight to the loader as before.
   // ---------------------------------------------------------------------------
   const CHAPTERS = [
     {
@@ -15,6 +18,7 @@
       epithet: 'The Anchor',
       load: 'a.MP4',
       video: 'A.mp4',
+      walk: 'dining',
       caption: 'They said to wait in the dining room, but the house feels quiet. Too quiet. I don’t remember those stairs being so steep, or so dark. I think I have to go up.',
       stamp: '14:32',
       log: 'I shouldn’t have come down here. The carpet on these stairs smells like old ozone and dust, but I’ve been walking for what feels like hours. I look up, and the top of the stairwell is gone. It just loops. I have to keep going. There’s no other way.'
@@ -27,6 +31,7 @@
       epithet: 'The Descent',
       load: 'b.MP4',
       video: 'B.mp4',
+      walk: 'hallway',
       caption: 'The stairs didn’t lead to the second floor. I’ve been walking down this hall for what feels like hours. The hum of the lights is getting louder. I just need to find a door.',
       stamp: '18:15',
       log: 'Found a hallway. The doors don’t feel right. I touched the wood on one of them and my hand tingled, like static electricity. For a second, the grain on the wood just... disappeared into gray lines. I’m so tired. I just need to find a room to catch my breath.'
@@ -115,6 +120,7 @@
   const screenHome = document.getElementById('screenHome');
   const screenLoad = document.getElementById('screenLoad');
   const screenScene = document.getElementById('screenScene');
+  const screenWalk = document.getElementById('screenWalk');
 
   const startBtn = document.getElementById('startBtn');
   const loadVideo = document.getElementById('loadVideo');
@@ -128,6 +134,13 @@
   const nextLabel = document.getElementById('nextLabel');
   const nextArrow = document.getElementById('nextArrow');
   const glitchVeil = document.getElementById('glitchVeil');
+  const WALK_ELEMENTS = {
+    mount: document.getElementById('walkMount'),
+    objective: document.getElementById('walkObjective'),
+    hint: document.getElementById('walkHint'),
+    joystick: document.getElementById('walkJoystick'),
+    fade: document.getElementById('walkFade'),
+  };
 
   const sectionAudio = document.getElementById('sectionAudio');
   const notesHandle = document.getElementById('notesHandle');
@@ -241,7 +254,7 @@
   }
 
   function showScreen(el) {
-    [screenHome, screenLoad, screenScene].forEach((s) => {
+    [screenHome, screenLoad, screenScene, screenWalk].forEach((s) => {
       const active = s === el;
       s.classList.toggle('is-active', active);
       s.setAttribute('aria-hidden', active ? 'false' : 'true');
@@ -478,6 +491,68 @@
     loadVideo.play().catch(() => {});
   }
 
+  // --- Walk phase (3D) ---------------------------------------------------------
+  // The walk module (three.js and the rooms) is only fetched once a chapter that
+  // has a scene is on screen, and the room is built while its video plays, so
+  // pressing NEXT drops straight into it. Any failure (no WebGL, a blocked
+  // fetch) falls back to the plain loading screen.
+  let walkModule = null;
+
+  function loadWalk() {
+    if (!walkModule) {
+      walkModule = import('./walk/walk.js').catch((err) => {
+        console.warn('walk phase unavailable:', err);
+        walkModule = null;
+        return null;
+      });
+    }
+    return walkModule;
+  }
+
+  function prepareWalk(chapter) {
+    if (!chapter.walk) return;
+    loadWalk().then((mod) => mod && mod.hasScene(chapter.walk) && mod.prepare(chapter.walk, WALK_ELEMENTS))
+      .catch((err) => console.warn('walk scene failed to build:', err));
+  }
+
+  function runLoaderThen(i) {
+    runLoader(CHAPTERS[i], () => {
+      glitchTo(() => enterChapter(i));
+    });
+  }
+
+  function goToWalk(i) {
+    if (busy) return;
+    const chapter = CHAPTERS[i];
+    busy = true;
+    clearPending();
+    typing = false;
+    hideNext();
+    captionCard.classList.remove('visible');
+
+    loadWalk().then((mod) => {
+      if (!mod || !mod.hasScene(chapter.walk)) { runLoaderThen(i + 1); return; }
+      glitchTo(() => {
+        body.className = 'phase-walk';   // the log panel closes: the room needs the whole screen
+        showScreen(screenWalk);
+        sceneVideo.pause();
+        skipLoader = () => mod.skip();
+        cancelLoader = () => mod.cancel();
+        mod.start(chapter.walk, WALK_ELEMENTS, { reducedMotion }).then((result) => {
+          skipLoader = null;
+          cancelLoader = null;
+          if (result === 'cancelled') return;
+          runLoaderThen(i + 1);
+        }).catch((err) => {
+          console.warn('walk failed, skipping to the loading screen:', err);
+          skipLoader = null;
+          cancelLoader = null;
+          runLoaderThen(i + 1);
+        });
+      });
+    });
+  }
+
   // --- Chapter screen --------------------------------------------------------
   function enterChapter(i) {
     index = i;
@@ -518,6 +593,9 @@
       warmClip.muted = true;
       warmClip.src = next.load;
     }
+
+    // And build this room's walk scene once the video has had a moment to start.
+    if (chapter.walk) setTimeout(() => { if (index === i) prepareWalk(chapter); }, 1500);
   }
 
   // --- Navigation ------------------------------------------------------------
@@ -560,6 +638,7 @@
   nextBtn.addEventListener('click', () => {
     if (busy) return;
     if (index === CHAPTERS.length - 1) goHome();
+    else if (CHAPTERS[index].walk) goToWalk(index);
     else goToChapter(index + 1);
   });
 
