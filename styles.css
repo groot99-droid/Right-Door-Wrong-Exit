@@ -385,6 +385,26 @@ body.phase-load .screen-load video {
   animation: tubeFlicker 9s infinite;
 }
 
+.walk-readout {
+  position: absolute;
+  z-index: 5;
+  top: calc(7vh + clamp(1.6rem, 4.4vw, 2.8rem));
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-family: "Share Tech Mono", "Courier New", monospace;
+  font-size: clamp(0.62rem, 1.6vw, 0.8rem);
+  letter-spacing: 0.3em;
+  text-indent: 0.3em;
+  color: rgba(255, 183, 3, 0.8);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.95);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+.walk-readout.visible { opacity: 1; }
+
 .walk-objective.near {
   color: #fff1c4;
   animation: objectivePulse 1.2s ease-in-out infinite;
@@ -783,6 +803,7 @@ body.notes-open .notes-tab-handle { right: min(33vw, 420px); }
   .reel-header { top: 10vh; }
   .next-btn { bottom: 6vh; padding: 0.8rem 1.5rem; }
   .walk-objective { top: 11vh; font-size: clamp(1rem, 5vw, 1.4rem); }
+  .walk-readout { top: calc(11vh + 1.9rem); font-size: 0.58rem; }
   .walk-hint { bottom: 5vh; font-size: 0.6rem; letter-spacing: 0.18em; }
   .notes-tab-handle,
   .skip-tab-handle {

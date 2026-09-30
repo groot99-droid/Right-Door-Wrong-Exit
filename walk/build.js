@@ -41,6 +41,7 @@ export function pbr(set, {
     if (set.map) params.map = set.map;
     if (set.normalMap) { params.normalMap = set.normalMap; params.normalScale = new THREE.Vector2(normalScale, normalScale); }
     if (set.roughnessMap) params.roughnessMap = set.roughnessMap;
+    if (set.emissiveMap) params.emissiveMap = set.emissiveMap;
   }
   if (emissive) { params.emissive = new THREE.Color(emissive); params.emissiveIntensity = emissiveIntensity; }
   if (flat) params.flatShading = true;
@@ -105,6 +106,9 @@ export function createBuilder() {
     return m;
   }
 
+  // Any object built elsewhere (an InstancedMesh, a sub-group) that finish() should add.
+  function object(o) { loose.push(o); return o; }
+
   // Axis-aligned collider from a centre and size (x, z).
   function collider(x, z, w, d) {
     colliders.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2 });
@@ -127,14 +131,55 @@ export function createBuilder() {
     return { group, colliders };
   }
 
-  return { add, mesh, collider, colliders, finish };
+  return { add, mesh, object, collider, colliders, finish };
+}
+
+// N copies of a finished batch group as one InstancedMesh per material (the endless
+// trampoline park repeats one cell four times for one draw call per material).
+export function repeat(group, matrices) {
+  const out = new THREE.Group();
+  for (const child of group.children) {
+    if (!child.isMesh) continue;
+    const im = new THREE.InstancedMesh(child.geometry, child.material, matrices.length);
+    matrices.forEach((m, i) => im.setMatrixAt(i, m));
+    im.instanceMatrix.needsUpdate = true;
+    im.frustumCulled = false;
+    im.castShadow = child.castShadow;
+    im.receiveShadow = child.receiveShadow;
+    im.name = child.name;
+    out.add(im);
+  }
+  return out;
+}
+
+// A wet floor for a phone: the room drawn again upside down under a glossy, slightly
+// transparent floor. One extra draw call per material, no render target, and it keeps the
+// fog, tone mapping and lights of the real room (three.js flips the winding for the
+// negative scale). Only meshes are cloned; geometry and materials are shared.
+export function mirrorY(group, floorY = 0) {
+  const m = new THREE.Group();
+  for (const child of group.children) {
+    if (!child.isMesh) continue;
+    const c = new THREE.Mesh(child.geometry, child.material);
+    c.matrixAutoUpdate = false;
+    c.matrix.copy(child.matrix);
+    c.castShadow = false;
+    c.receiveShadow = false;
+    c.name = 'mirror_' + child.name;
+    m.add(c);
+  }
+  m.position.y = floorY * 2;
+  m.scale.y = -1;
+  return m;
 }
 
 // Free everything a scene allocated.
 export function disposeScene(root) {
   const seenMat = new Set();
+  const seenGeo = new Set();
   root.traverse((o) => {
-    if (o.geometry) o.geometry.dispose();
+    if (o.isInstancedMesh) o.dispose();
+    if (o.geometry && !seenGeo.has(o.geometry)) { seenGeo.add(o.geometry); o.geometry.dispose(); }
     const mats = Array.isArray(o.material) ? o.material : o.material ? [o.material] : [];
     for (const m of mats) {
       if (seenMat.has(m)) continue;

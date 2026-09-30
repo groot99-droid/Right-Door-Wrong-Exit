@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>walk scene viewer</title>
+<link rel="stylesheet" href="../styles.css" />
+<script type="importmap">
+{ "imports": { "three": "../vendor/three/build/three.module.js", "three/addons/": "../vendor/three/examples/jsm/" } }
+</script>
+<style>
+  body { background: #000; }
+  .screen-walk { opacity: 1; visibility: visible; pointer-events: auto; }
+  .stage::before { display: none; }
+  .viewer-bar { position: fixed; top: 0; left: 0; right: 0; z-index: 90; padding: 6px 10px; font: 12px/1.4 "Share Tech Mono", monospace; color: #ffb703; background: rgba(0,0,0,0.6); }
+  .viewer-bar a { color: #fff; margin-right: 10px; }
+</style>
+</head>
+<body class="phase-walk">
+<div class="viewer-bar">
+  scene viewer — <a href="?scene=dining">dining</a><a href="?scene=hallway">hallway</a><a href="?scene=teal">teal</a><a href="?scene=teal2">teal2</a><a href="?scene=flooded">flooded</a><a href="?scene=trampoline">trampoline</a><a href="?scene=grocery">grocery</a>
+  <span id="status"></span>
+</div>
+<main class="stage" id="stage">
+  <section class="screen screen-walk is-active" id="screenWalk">
+    <div class="walk-mount" id="walkMount"></div>
+    <div class="walk-objective" id="walkObjective"></div>
+    <div class="walk-readout" id="walkReadout"></div>
+    <div class="walk-hint" id="walkHint"></div>
+    <div class="walk-joystick" id="walkJoystick" aria-hidden="true"><div class="knob"></div></div>
+    <div class="walk-fade" id="walkFade"></div>
+  </section>
+</main>
+<script type="module">
+  // Dev viewer: runs one walk scene on its own (node tools/scene_shot.mjs drives it).
+  const params = new URLSearchParams(location.search);
+  const id = params.get('scene') || 'dining';
+  const els = {
+    mount: document.getElementById('walkMount'), objective: document.getElementById('walkObjective'),
+    hint: document.getElementById('walkHint'), joystick: document.getElementById('walkJoystick'),
+    readout: document.getElementById('walkReadout'), fade: document.getElementById('walkFade'),
+  };
+  const status = document.getElementById('status');
+  const mod = await import('../walk/walk.js');
+  window.walk = mod;
+  window.walkReady = false;
+  status.textContent = 'building ' + id + '…';
+  mod.start(id, els, { sound: false }).then((r) => { status.textContent = id + ': ' + r; window.walkResult = r; });
+  await new Promise((res) => { const t = setInterval(() => { if (mod.debug.current) { clearInterval(t); res(); } }, 50); });
+  window.walkReady = true;
+  status.textContent = id + ' ready';
+</script>
+</body>
+</html>

@@ -44,6 +44,7 @@
       epithet: 'The Glitch',
       load: 'c.MP4',
       video: 'C.mp4',
+      walk: 'teal',
       caption: 'Found a place to rest, but it doesn’t feel real. The air is entirely still. There’s no dust. That doorway... it doesn’t reflect any light. It just swallows it.',
       stamp: '27:81',
       log: 'Found a teal room. The time on my watch doesn’t make sense anymore. The second hand is ticking backward, but the sun outside the fake window never moves. I found an orange couch. I’m going to close my eyes. Just for a minute.'
@@ -56,6 +57,7 @@
       epithet: 'The Mutation',
       load: 'd.MP4',
       video: 'D.MP4',
+      walk: 'teal2',
       caption: 'I closed my eyes for a second. The room is the same, but the door changed. The architecture is breathing. It’s shifting when I don’t look directly at it.',
       stamp: 'SysTime: 88:88',
       log: 'I woke up but the room is wrong. I peeled back some of the wallpaper. It’s not wood or brick underneath; it’s a green, glowing grid. The room wasn’t just sitting here while I slept—it rebuilt itself. The humming is getting louder. I have to get through that arched doorway before it finishes.'
@@ -68,6 +70,7 @@
       epithet: 'The Decay',
       load: 'e.MP4',
       video: 'E.mp4',
+      walk: 'flooded',
       caption: 'The deeper I go, the more the illusion falls apart. They painted a sky on the wall to make us forget we’re buried. The water is freezing. Whatever is running this place is starting to break down.',
       stamp: 'ERR_CLOCK_NOT_FOUND',
       log: 'I broke through. It’s dark, and everything is wet. The water dripping from the ceiling doesn’t splash—it hits the ground as perfect, square blue blocks before melting into puddles. The environment is failing. I tried to walk across a grate but the metal felt soft. The whole corridor is groaning.'
@@ -80,6 +83,7 @@
       epithet: 'The Macro-Structure',
       load: 'f.MP4',
       video: 'F.mp4',
+      walk: 'trampoline',
       caption: 'I fell through a vent and landed here. It goes on forever. A playground for no one. The silence is so heavy it’s pressing against my eardrums. I have to keep moving.',
       stamp: 'DISTANCE: NaN',
       log: 'I didn’t hit the ground, I just... landed. I’m in a massive room covered in orange and black trampoline padding. No walls. No ceiling. The ground repeats. The exact same scuff mark passes under my feet every hundred steps. I am on a treadmill. The geometry is a sphere. I’m trapped in a loop.'
@@ -92,6 +96,7 @@
       epithet: 'The Anomaly',
       load: 'g.MP4',
       video: 'G.mp4',
+      walk: 'grocery',
       caption: 'A grocery store, completely stripped. But right in the middle... a monument. Who roped off the cart? Am I following someone, or is the room trying to show me something?',
       stamp: 'PING_DETECTED_0x8F',
       log: 'Wait. Something changed. I heard a noise—a digital chime. I looked up and there is a single, bright red glow on the horizon. Out here? It’s an anomaly. It’s the only thing that isn’t supposed to be here. I’m heading for it.'
@@ -139,6 +144,7 @@
     objective: document.getElementById('walkObjective'),
     hint: document.getElementById('walkHint'),
     joystick: document.getElementById('walkJoystick'),
+    readout: document.getElementById('walkReadout'),
     fade: document.getElementById('walkFade'),
   };
 
@@ -155,6 +161,7 @@
   // a gesture before it is allowed to start.
   const soundToggle = document.getElementById('soundToggle');
   let soundOn = true;
+  let walkModule = null;   // the 3D walk module, loaded on demand (see loadWalk)
   let gestureArmed = false;
 
   function armGesture() {
@@ -199,6 +206,7 @@
   function applySound() {
     // The clips are always silent — the section track is the only sound here.
     sectionAudio.muted = !soundOn;
+    if (walkModule) walkModule.then((mod) => mod && mod.setSound(soundOn));
     soundToggle.setAttribute('aria-pressed', String(soundOn));
     soundToggle.querySelector('.label').textContent = soundOn ? 'SOUND ON' : 'SOUND OFF';
   }
@@ -496,8 +504,6 @@
   // has a scene is on screen, and the room is built while its video plays, so
   // pressing NEXT drops straight into it. Any failure (no WebGL, a blocked
   // fetch) falls back to the plain loading screen.
-  let walkModule = null;
-
   function loadWalk() {
     if (!walkModule) {
       walkModule = import('./walk/walk.js').catch((err) => {
@@ -538,15 +544,18 @@
         sceneVideo.pause();
         skipLoader = () => mod.skip();
         cancelLoader = () => mod.cancel();
-        mod.start(chapter.walk, WALK_ELEMENTS, { reducedMotion }).then((result) => {
+        mod.start(chapter.walk, WALK_ELEMENTS, { reducedMotion, sound: soundOn }).then((result) => {
           skipLoader = null;
           cancelLoader = null;
           if (result === 'cancelled') return;
+          // The last room's exit closes the loop: back to the title card.
+          if (i === CHAPTERS.length - 1) { busy = false; goHome(); return; }
           runLoaderThen(i + 1);
         }).catch((err) => {
           console.warn('walk failed, skipping to the loading screen:', err);
           skipLoader = null;
           cancelLoader = null;
+          if (i === CHAPTERS.length - 1) { busy = false; goHome(); return; }
           runLoaderThen(i + 1);
         });
       });
@@ -633,12 +642,14 @@
     });
   }
 
-  startBtn.addEventListener('click', () => goToChapter(0));
+  // ?chapter=C makes START open on that room (used by tools/walk_test.mjs and for look-dev).
+  const jumpTo = CHAPTERS.findIndex((c) => c.id === String(new URLSearchParams(window.location.search).get('chapter') || '').toUpperCase());
+  startBtn.addEventListener('click', () => goToChapter(jumpTo >= 0 ? jumpTo : 0));
 
   nextBtn.addEventListener('click', () => {
     if (busy) return;
-    if (index === CHAPTERS.length - 1) goHome();
-    else if (CHAPTERS[index].walk) goToWalk(index);
+    if (CHAPTERS[index].walk) goToWalk(index);
+    else if (index === CHAPTERS.length - 1) goHome();
     else goToChapter(index + 1);
   });
 

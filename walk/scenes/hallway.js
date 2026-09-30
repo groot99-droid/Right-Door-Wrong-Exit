@@ -10,11 +10,14 @@ import { pbr, place, box, cyl, createBuilder } from '../build.js';
 export const meta = {
   id: 'hallway',
   objective: 'WALK TO THE END',
-  arrive: 'THE END',
+  arrive: 'GO DOWN',
   start: { x: 1.0, z: 0, yaw: -Math.PI / 2 }, // looking down +x
 };
 
 const LEN = 36, WID = 3.4, HGT = 2.7;
+// The stairwell under the sign: it goes DOWN, into the mossy block shaft of the next loading
+// clip. Blender's file ends at the wall; this is the game's exit from it.
+const WELL = { w: 1.4, h: 1.9, rise: 0.2, run: 0.28, steps: 16, landing: 1.2 };
 
 function vendTexture() {
   const c = document.createElement('canvas');
@@ -75,6 +78,8 @@ export async function build({ quality, yieldFrame }) {
   await yieldFrame();
   const tiles = T.ceilingTile(s, { seed: 63, tile: 2.0 });
   await yieldFrame();
+  const moss = T.mossBlock(s, { seed: 71, tile: 2.0 });
+  await yieldFrame();
 
   const M = {
     carpet: pbr(carpet, { name: 'carpet', roughness: 1, env: 0.1, normalScale: 0.7, castShadow: false }),
@@ -93,6 +98,8 @@ export async function build({ quality, yieldFrame }) {
     vendBadge: pbr(null, { name: 'vend_badge', color: '#ffffff', roughness: 0.5, env: 0, emissive: '#ffffff', emissiveIntensity: 3.0, castShadow: false }),
     cable: pbr(null, { name: 'cable', color: '#0a0a0a', roughness: 0.6, env: 0.2 }),
     signText: pbr({ map: signTexture(), tile: 1 }, { name: 'sign', roughness: 0.6, env: 0.2, worldUV: false }),
+    moss: pbr(moss, { name: 'moss_block', roughness: 0.95, env: 0.05, normalScale: 0.8 }),
+    void: pbr(null, { name: 'void', color: '#000000', roughness: 1, env: 0, castShadow: false }),
   };
 
   const B = createBuilder();
@@ -104,12 +111,40 @@ export async function build({ quality, yieldFrame }) {
   B.add(box(LEN + 2 * TH, TH, WID + 2 * TH), M.ceiling, place(LEN / 2, HGT + TH / 2, 0));
   B.add(box(LEN + 2 * TH, HGT, TH), M.wall, place(LEN / 2, HGT / 2, hw + TH / 2));   // Blender left (-y)
   B.add(box(LEN + 2 * TH, HGT, TH), M.wall, place(LEN / 2, HGT / 2, -hw - TH / 2));  // Blender right (+y)
-  B.add(box(TH, HGT, WID + 2 * TH), M.wall, place(LEN + TH / 2, HGT / 2, 0));        // end wall
+  // end wall: two stubs beside the stairwell opening, and the header above it
+  const stubW = (WID - WELL.w) / 2 + TH;
+  B.add(box(TH, HGT, stubW), M.wall, place(LEN + TH / 2, HGT / 2, WELL.w / 2 + stubW / 2));
+  B.add(box(TH, HGT, stubW), M.wall, place(LEN + TH / 2, HGT / 2, -WELL.w / 2 - stubW / 2));
+  B.add(box(TH, HGT - WELL.h, WELL.w), M.wall, place(LEN + TH / 2, WELL.h + (HGT - WELL.h) / 2, 0));
+  B.collider(LEN + TH / 2, WELL.w / 2 + stubW / 2, TH, stubW);
+  B.collider(LEN + TH / 2, -WELL.w / 2 - stubW / 2, TH, stubW);
   B.add(box(TH, HGT, WID + 2 * TH), M.wall, place(-TH / 2, HGT / 2, 0));             // start wall
   // baseboards
   B.add(box(LEN, 0.1, 0.012), M.trim, place(LEN / 2, 0.05, hw - 0.006));
   B.add(box(LEN, 0.1, 0.012), M.trim, place(LEN / 2, 0.05, -hw + 0.006));
-  B.add(box(0.012, 0.1, WID), M.trim, place(LEN - 0.006, 0.05, 0));
+  B.add(box(0.012, 0.1, stubW - TH), M.trim, place(LEN - 0.006, 0.05, WELL.w / 2 + (stubW - TH) / 2));
+  B.add(box(0.012, 0.1, stubW - TH), M.trim, place(LEN - 0.006, 0.05, -WELL.w / 2 - (stubW - TH) / 2));
+
+  // the stairwell: a flight of block steps going down into a mossy shaft, then a landing
+  // and nothing beyond it but black
+  const runTotal = WELL.run * WELL.steps, depth = WELL.rise * WELL.steps;
+  const x0 = LEN + TH;
+  for (let i = 0; i < WELL.steps; i++) {
+    const top = -i * WELL.rise;                // the first tread is level with the hall floor
+    const h = depth + 0.6 + top;               // solid down to below the landing
+    B.add(box(WELL.run, h, WELL.w), M.moss, place(x0 + (i + 0.5) * WELL.run, top - h / 2, 0));
+  }
+  const landX = x0 + runTotal;
+  B.add(box(WELL.landing, 0.6, WELL.w), M.moss, place(landX + WELL.landing / 2, -depth - 0.3, 0));
+  const shaftLen = runTotal + WELL.landing + TH;
+  const shaftH = depth + HGT + 0.6;
+  B.add(box(shaftLen, shaftH, TH), M.moss, place(x0 + shaftLen / 2, HGT - shaftH / 2, WELL.w / 2 + TH / 2));
+  B.add(box(shaftLen, shaftH, TH), M.moss, place(x0 + shaftLen / 2, HGT - shaftH / 2, -WELL.w / 2 - TH / 2));
+  const slope = Math.atan2(depth, runTotal);
+  const ceilLen = Math.hypot(depth, runTotal) + 0.6;
+  B.add(box(ceilLen, TH, WELL.w + 2 * TH), M.moss, place(x0 + 0.1 + (ceilLen / 2) * Math.cos(slope), WELL.h + 0.15 - (ceilLen / 2) * Math.sin(slope), 0, 0, 0, -slope));
+  B.add(box(WELL.landing + TH, TH, WELL.w + 2 * TH), M.moss, place(landX + WELL.landing / 2, WELL.h + 0.1 - depth, 0));
+  B.add(box(TH, shaftH, WELL.w + 2 * TH), M.void, place(landX + WELL.landing + TH / 2, HGT - shaftH / 2, 0));
 
   // doors: Blender y = -1.65 (left, three z = +1.65) and +1.65 (right, three z = -1.65)
   for (let i = 0; i < 9; i++) {
@@ -163,18 +198,26 @@ export async function build({ quality, yieldFrame }) {
     for (let i = 0; i < pool.length; i++) pool[i].position.copy(sorted[i]);
   }
 
-  const trigger = { minX: LEN - 1.35, maxX: LEN, minZ: -hw, maxZ: hw };
-  const nearGoal = { minX: LEN - 5, maxX: LEN, minZ: -hw, maxZ: hw };
+  // a green glimmer at the top of the flight; the fog keeps the bottom black
+  const glow = new THREE.PointLight(0x7fd06a, 3.5, 6, 2);
+  glow.position.set(x0 + 0.6, 1.4, 0);
+  lights.add(glow);
+
+  // the exit: step into the opening, and the camera walks the first treads down
+  const trigger = { minX: LEN - 0.35, maxX: LEN + 0.6, minZ: -WELL.w / 2, maxZ: WELL.w / 2 };
+  const nearGoal = { minX: LEN - 5, maxX: LEN + 0.6, minZ: -hw, maxZ: hw };
   const exitPath = [
-    new THREE.Vector3(LEN - 1.3, 1.62, 0),
-    new THREE.Vector3(LEN - 0.55, 1.62, 0),
+    new THREE.Vector3(x0 + 0.5, 1.62 - 0.2, 0),
+    new THREE.Vector3(x0 + 1.6, 1.62 - 1.0, 0),
+    new THREE.Vector3(x0 + 2.8, 1.62 - 1.9, 0),
   ];
 
   return {
     meta,
     group, lights, colliders, update,
-    bounds: { minX: 0, maxX: LEN, minZ: -hw, maxZ: hw },
-    trigger, nearGoal, exitPath, exitLookAt: new THREE.Vector3(LEN, 2.05, 0),
+    bounds: { minX: 0, maxX: LEN + 0.6, minZ: -hw, maxZ: hw },
+    trigger, nearGoal, exitPath, exitLookAt: new THREE.Vector3(x0 + 4.5, -2.2, 0),
+    exitFadeStart: 0.55,
     fog: new THREE.FogExp2(0x1a1408, 0.035),
     background: 0x1a1408,
     exposure: 1.0,

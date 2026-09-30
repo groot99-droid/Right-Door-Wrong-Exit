@@ -28,6 +28,8 @@ export function createControls(camera, domElement, { reducedMotion = false } = {
   let colliders = [];           // [{ minX, maxX, minZ, maxZ }]
   let bounds = null;            // { minX, maxX, minZ, maxZ } the walkable extent
   let walkTime = 0;             // for the head bob
+  let bobScale = 1;             // trampoline beds double it
+  let eyeOffset = 0;            // added to the camera height (waking up on the sofa)
   let moving = false;
   let lastPointerType = 'mouse';
 
@@ -191,15 +193,17 @@ export function createControls(camera, domElement, { reducedMotion = false } = {
       walkTime += delta * (reducedMotion ? 0 : 1);
     }
     // Head bob: a slow vertical sway and a smaller lateral one, faded out when standing.
-    const bob = reducedMotion ? 0 : (moving ? 1 : 0);
+    const bob = reducedMotion ? 0 : (moving ? bobScale : 0);
     camera.position.set(
       base.x + Math.sin(walkTime * 6.2) * 0.012 * bob,
-      base.y + Math.abs(Math.sin(walkTime * 6.2)) * 0.028 * bob,
+      base.y + eyeOffset + Math.abs(Math.sin(walkTime * 6.2)) * 0.028 * bob,
       base.z,
     );
   }
 
-  function setPosition(x, y, z) { base.set(x, y, z); camera.position.copy(base); }
+  function setPosition(x, y, z) { base.set(x, y, z); camera.position.copy(base); camera.position.y += eyeOffset; }
+  function setBobScale(s) { bobScale = s; }
+  function setEyeOffset(dy) { eyeOffset = dy; }
   function position() { return base; }
   function setColliders(list, extent) { colliders = list || []; bounds = extent || null; }
   function setEnabled(on) {
@@ -233,6 +237,6 @@ export function createControls(camera, domElement, { reducedMotion = false } = {
 
   return {
     update, setPosition, position, setLook, getLook, lookAt, rotateBy, setColliders, setEnabled,
-    isMoving, setKeys, onJoystick, dispose, EYE_HEIGHT,
+    isMoving, setKeys, onJoystick, dispose, EYE_HEIGHT, setBobScale, setEyeOffset,
   };
 }
