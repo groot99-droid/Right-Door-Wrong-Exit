@@ -16,11 +16,19 @@ import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { createControls, EYE_HEIGHT } from './controls.js';
 import { disposeScene } from './build.js';
+import * as sound from './sound.js';
 
 const SCENES = {
   dining: () => import('./scenes/dining.js'),
   hallway: () => import('./scenes/hallway.js'),
+  teal: () => import('./scenes/teal.js'),
+  teal2: () => import('./scenes/teal2.js'),
+  flooded: () => import('./scenes/flooded.js'),
+  trampoline: () => import('./scenes/trampoline.js'),
+  grocery: () => import('./scenes/grocery.js'),
 };
+
+export function setSound(on) { sound.setEnabled(on); }
 
 export function hasScene(id) { return !!SCENES[id]; }
 
@@ -139,19 +147,32 @@ export async function start(id, elements, opts = {}) {
   const q = quality;
   const reduced = q.reducedMotion || !!opts.reducedMotion;
   const scene = built.scene;
-  const camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.05, 80);
+  const camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.05, built.far || 80);
   scene.add(camera);
   r.toneMappingExposure = built.exposure || 1;
+  if (opts.sound !== undefined) sound.setEnabled(!!opts.sound);
+  sound.resume();
 
   const controls = createControls(camera, r.domElement, { reducedMotion: reduced });
   controls.setColliders(built.colliders, built.bounds);
   controls.setPosition(built.meta.start.x, EYE_HEIGHT, built.meta.start.z);
-  controls.setLook(built.meta.start.yaw || 0, window.innerWidth < window.innerHeight ? -0.08 : 0);
+  controls.setLook(built.meta.start.yaw || 0, built.meta.start.pitch !== undefined ? built.meta.start.pitch : (window.innerWidth < window.innerHeight ? -0.08 : 0));
+  // waking up: start low and stand up over the first moments
+  let rise = built.meta.riseFrom !== undefined ? { from: built.meta.riseFrom - EYE_HEIGHT, t: 0 } : null;
+  if (rise) controls.setEyeOffset(rise.from);
 
   // HUD
-  const { objective, hint, joystick } = elements;
+  const { objective, hint, joystick, readout } = elements;
   objective.textContent = built.meta.objective;
   objective.classList.remove('near');
+  if (readout) { readout.textContent = ''; readout.classList.remove('visible'); }
+  // what a scene may do to the HUD and the walk from its update()
+  const ctx = {
+    setObjective(text) { built.meta.objective = text; if (!objective.classList.contains('near')) objective.textContent = text; },
+    setArrive(text) { built.meta.arrive = text; if (objective.classList.contains('near')) objective.textContent = text; },
+    setReadout(text) { if (!readout) return; readout.textContent = text || ''; readout.classList.toggle('visible', !!text); },
+    sound, reduced, quality: q, controls,
+  };
   hint.textContent = q.touch
     ? 'LEFT THUMB TO WALK  ·  RIGHT THUMB TO LOOK'
     : 'W A S D  TO WALK  ·  MOUSE TO LOOK';
@@ -219,24 +240,37 @@ export async function start(id, elements, opts = {}) {
     controls.setEnabled(false);
     objective.classList.add('near');
     objective.textContent = built.meta.arrive;
-    const pts = [controls.position().clone(), ...built.exitPath];
+    const from = camera.position.clone();
+    const path = typeof built.exitPath === 'function' ? built.exitPath(from) : built.exitPath;
+    const pts = [from, ...path];
     exitCurve = new THREE.CatmullRomCurve3(pts, false, 'centripetal', 0.5);
-    exitDur = Math.max(1.6, exitCurve.getLength() / 1.7);
+    // a scene may set its own pace (a fall is quick, lying down is slow)
+    exitDur = built.exitDuration || Math.max(1.6, exitCurve.getLength() / 1.7);
     exitT = 0;
     lookFrom.copy(camera.quaternion);
-    tmpM.lookAt(camera.position, built.exitLookAt, camera.up);
+    const target = typeof built.exitLookAt === 'function' ? built.exitLookAt(from) : built.exitLookAt;
+    tmpM.lookAt(from, target, camera.up);
     lookTo.setFromRotationMatrix(tmpM);
+    if (built.onExit) built.onExit(ctx);
   }
 
   // One simulation tick (no drawing). The test harness calls this directly so a walk
   // is deterministic however slowly the machine renders.
   function simulate(dt) {
     if (state === 'walk') {
+      if (rise) {
+        rise.t = Math.min(1, rise.t + dt / 1.4);
+        const e = 1 - Math.pow(1 - rise.t, 3);
+        controls.setEyeOffset(rise.from * (1 - e));
+        if (rise.t >= 1) { rise = null; controls.setEyeOffset(0); }
+      }
       controls.update(dt);
       const p = controls.position();
-      if (built.update) built.update(p);
-      if (inBox(p, built.trigger)) beginExit();
-      else if (inBox(p, built.nearGoal)) {
+      // an endless floor: the scene may wrap the player back onto its tile
+      if (built.wrap && built.wrap(p)) controls.update(0);
+      if (built.update) built.update(p, dt, camera, ctx);
+      if (built.trigger && inBox(p, built.trigger)) beginExit();
+      else if (built.nearGoal && inBox(p, built.nearGoal)) {
         if (!objective.classList.contains('near')) { objective.classList.add('near'); objective.textContent = built.meta.arrive; }
       } else if (objective.classList.contains('near')) {
         objective.classList.remove('near'); objective.textContent = built.meta.objective;
@@ -246,15 +280,24 @@ export async function start(id, elements, opts = {}) {
       if (hintTimer > 6) hint.classList.remove('visible');
     } else if (state === 'exit') {
       exitT = Math.min(1, exitT + dt / exitDur);
-      const e = exitT < 0.5 ? 2 * exitT * exitT : 1 - Math.pow(-2 * exitT + 2, 2) / 2;
+      const e = built.exitEase === 'in' ? exitT * exitT
+        : built.exitEase === 'linear' ? exitT
+          : exitT < 0.5 ? 2 * exitT * exitT : 1 - Math.pow(-2 * exitT + 2, 2) / 2;
       exitCurve.getPointAt(e, tmpV);
       camera.position.copy(tmpV);
       if (!reduced) {
+        const shake = built.exitShake || 0;
         camera.position.y += Math.sin(exitT * Math.PI * 2 * exitDur * 1.6) * 0.02;
+        if (shake) {
+          camera.position.x += (Math.random() - 0.5) * shake;
+          camera.position.y += (Math.random() - 0.5) * shake;
+          camera.position.z += (Math.random() - 0.5) * shake;
+        }
       }
-      camera.quaternion.slerpQuaternions(lookFrom, lookTo, Math.min(1, exitT * 1.8));
-      if (built.update) built.update(camera.position);
-      const dark = Math.max(0, (exitT - 0.45) / 0.55);
+      camera.quaternion.slerpQuaternions(lookFrom, lookTo, Math.min(1, exitT * (built.exitTurn || 1.8)));
+      if (built.update) built.update(camera.position, dt, camera, ctx);
+      const fadeAt = built.exitFadeStart !== undefined ? built.exitFadeStart : 0.45;
+      const dark = Math.max(0, (exitT - fadeAt) / (1 - fadeAt));
       fade.style.opacity = String(dark * dark);
       if (exitT >= 1) { state = 'done'; finish('reached'); return false; }
     }
@@ -276,6 +319,19 @@ export async function start(id, elements, opts = {}) {
     return controls.position().toArray();
   }
 
+  // Test hook: simulate without drawing.
+  function sim(dt = 1 / 60, n = 1) {
+    for (let i = 0; i < n; i++) if (!simulate(dt)) break;
+    return controls.position().toArray();
+  }
+
+  // Test hook: stop or restart the animation loop (screenshots under software GL need a
+  // quiet main thread; step() still renders on demand).
+  function setLoop(on) {
+    if (!on) { cancelAnimationFrame(raf); raf = 0; }
+    else if (!raf && current) { last = performance.now(); raf = requestAnimationFrame(frame); }
+  }
+
   function onVisibility() {
     if (document.hidden) { cancelAnimationFrame(raf); raf = 0; }
     else if (!raf && current) { last = performance.now(); raf = requestAnimationFrame(frame); }
@@ -293,8 +349,10 @@ export async function start(id, elements, opts = {}) {
     window.removeEventListener('resize', resize);
     document.removeEventListener('visibilitychange', onVisibility);
     controls.dispose();
+    sound.stopHum();
     joystick.classList.remove('visible');
     hint.classList.remove('visible');
+    if (readout) readout.classList.remove('visible');
     scene.remove(camera);
     // Free the room. A revisit rebuilds it (the loop returns to the title card first).
     prepared.delete(id);
@@ -303,7 +361,7 @@ export async function start(id, elements, opts = {}) {
     resolveWalk(result);
   }
 
-  current = { finish, step, controls, camera, built, scene, get state() { return state; } };
+  current = { finish, step, sim, setLoop, controls, camera, built, scene, ctx, get state() { return state; } };
   controls.setEnabled(true);
   r.render(scene, camera);
   // fade up from black once the first frame is on the canvas

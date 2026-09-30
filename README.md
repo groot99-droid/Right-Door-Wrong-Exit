@@ -4,11 +4,11 @@ A single-page, click-through liminal-space walkthrough in the backrooms genre. I
 arcade-cabinet title card with a **START** button; starting the walk drops you into a loading
 screen — the clip alone, no overlay — that runs for five seconds and then glitches into the
 first room. Each room plays a looping video behind a
-typewritten caption, and once the caption finishes typing a **NEXT** button appears. For a room
-that has a **3D scene**, NEXT glitches you *into* the room you were just looking at, in first
-person, and you have to walk to its exit — the stairs, the end of the hall — before the next
-loading screen plays. Rooms without a scene yet go straight to the loading screen, the glitch,
-the next room. Seven rooms later the loop returns you to the title card.
+typewritten caption, and once the caption finishes typing a **NEXT** button appears. NEXT then glitches you
+*into* the room you were just looking at, in first person, and you have to walk to its exit —
+the stairs, the end of the hall, the couch, the arch, the grate, the red glow, the EXIT door —
+before the next loading screen plays. Every room has a 3D scene; after the last one the loop
+returns you to the title card.
 
 Built with plain HTML, CSS, and JavaScript — no framework, no build step. The only dependency is
 a vendored copy of [three.js](https://threejs.org/) r160 (MIT, `vendor/three/`) for the 3D scenes.
@@ -20,7 +20,7 @@ gate ──click──▶ 0.PNG (home) ──START──▶ a.MP4 (plays in full
                               ▲                                              │
                               │                                            NEXT
                               │                                              ▼
-                              │                    3D walk: reach the exit (rooms that have one)
+                              │                    3D walk: reach the room's exit
                               │                                              │
                               └────── b.MP4 … g.MP4 ◀── fade to black ───────┘
 ```
@@ -29,11 +29,11 @@ gate ──click──▶ 0.PNG (home) ──START──▶ a.MP4 (plays in full
 | --- | --- | --- | --- | --- | --- |
 | The Dining Room — The Anchor | `A.mp4` | `a.MP4` | `A.mp3` | `dining` · find the stairs | 1 · The Departure from Reality |
 | The Hallway — The Descent | `B.mp4` | `b.MP4` | `B.mp3` | `hallway` · walk to the end | 1 · The Departure from Reality |
-| Teal Room, Square Door — The Glitch | `C.mp4` | `c.MP4` | `C.mp3` | — | 2 · The Holding Cells |
-| Teal Room, Arched Door — The Mutation | `D.MP4` | `d.MP4` | `D.mp3` | — | 2 · The Holding Cells |
-| Flooded Corridor — The Decay | `E.mp4` | `e.MP4` | `E.mp3` | — | 3 · The System Breakdown |
-| Trampoline Park — The Macro-Structure | `F.mp4` | `f.MP4` | `F.mp3` | — | 4 · The Empty Expanse |
-| Grocery Store — The Anomaly | `G.mp4` | `g.MP4` | `G.mp3` | — | 4 · The Empty Expanse |
+| Teal Room, Square Door — The Glitch | `C.mp4` | `c.MP4` | `C.mp3` | `teal` · find somewhere to rest | 2 · The Holding Cells |
+| Teal Room, Arched Door — The Mutation | `D.MP4` | `d.MP4` | `D.mp3` | `teal2` · get through the arch | 2 · The Holding Cells |
+| Flooded Corridor — The Decay | `E.mp4` | `e.MP4` | `E.mp3` | `flooded` · reach the red door | 3 · The System Breakdown |
+| Trampoline Park — The Macro-Structure | `F.mp4` | `f.MP4` | `F.mp3` | `trampoline` · keep moving | 4 · The Empty Expanse |
+| Grocery Store — The Anomaly | `G.mp4` | `g.MP4` | `G.mp3` | `grocery` · find the exit | 4 · The Empty Expanse |
 
 The home screen runs on `0.PNG` and `0.mp3`.
 
@@ -74,14 +74,49 @@ during a walk, as on the loading screens, so a room is never a dead end.
 - **`hallway`** — the Hallway, rebuilt from `liminal_hallway_v2.blend`: 36 m of mustard
   wallpaper, grey carpet and tile ceiling, nine fluorescent panels, nine doors a side (the
   second on the left is a humming vending machine), outlets, baseboards, and a sign band at the
-  far end that reads THE END.
+  far end that reads THE END. Under the sign a stairwell of mossy pixel-block stone goes
+  **down**, into the shaft of the next loading clip.
+- **`teal`** — Teal Room, Square Door: the clean teal box, cream ceiling, coarse brown flecked
+  carpet, the orange angular leather sofa, the plain doorway that is pitch black (it blocks: "it
+  just swallows it"), the little blocky plant, and from the log a fake window whose sun never
+  moves and a watch on the HUD that runs backward. Reach the couch and close your eyes; the
+  next clip is the sleeper on it.
+- **`teal2`** — Teal Room, Arched Door: the same room, wrong. You wake up low beside a rounded
+  cognac sofa and stand; the room is narrower, the doorway is a black arch, the plant is tall
+  and spiky. Patches of wallpaper are peeled back on a glowing green grid that pulses; the walls
+  breathe; the patches shift when you are not looking; a hum rises the closer you get. Get
+  through the arch before it finishes.
+- **`flooded`** — Flooded Corridor: white tile to hip height, steel handrails, a painted sky
+  along the whole left wall, empty wooden frames down the right, square recessed light panels,
+  the yellow tactile strip, and a skin of standing water that mirrors the lights (the room is
+  drawn again upside down under a glossy floor: no render target, one extra draw call per
+  material). Drips fall from the ceiling as square blue blocks that melt into puddles; the
+  corridor groans. The red door at the end is the lure: the grate in front of it sags underfoot,
+  then gives way, and you fall into the riveted shaft of the next clip.
+- **`trampoline`** — Trampoline Park: black beds edged in yellow set in orange padded frames,
+  pale pads between, padded columns, angled bed walls, a dark truss ceiling with a lattice of
+  LED panels, and the concrete apron you land on. One 28 m cell of it is drawn four times
+  (instanced) and you are wrapped back onto it: the ground repeats, the same scuff mark passes
+  under your feet, DISTANCE reads NaN. After a hundred metres or so a digital chime sounds and
+  a single red glow appears on the horizon. Head for it; the next clip's radar finds it.
+- **`grocery`** — Grocery Store: glossy speckled vinyl, an acoustic-tile ceiling with continuous
+  fluorescent rows (the left one flickers), cream columns, empty grey gondola shelving, and in a
+  clearing at the heart of it the red cart roped off with sagging caution tape. The shelving is
+  a **maze** (a seeded perfect maze with a few loops, generated at build time; the test checks
+  it is solvable): the entrance doors behind you are black glass and locked, the anomaly pings
+  when you come near the cart, and the lit EXIT sign shows over the shelves on the far wall.
+  Find the way. The exit closes the loop: a fade, and the title card.
 
 A chapter names its scene with `walk: '<id>'` in `CHAPTERS`; `walk/walk.js` maps ids to
-`walk/scenes/<id>.js`. A scene module exports `meta` (objective, arrival prompt, start position)
-and `build({ quality, yieldFrame })`, which returns the batched geometry group, the lights, the
-AABB colliders, the walkable bounds, the trigger and near-goal boxes, the exit camera path, fog
-and exposure. The rooms after the hallway do not have scenes yet: they still go straight to the
-loading screen.
+`walk/scenes/<id>.js`. A scene module exports `meta` (objective, arrival prompt, start position,
+optionally `riseFrom` to wake up low) and `build({ quality, yieldFrame })`, which returns the
+batched geometry group, the lights, the AABB colliders, the walkable bounds, the trigger and
+near-goal boxes, the exit camera path (an array, or a function of where the player is), the
+exit's duration / easing / fade / shake, fog and exposure, and optionally `update(pos, dt,
+camera, ctx)` for animation (drips, flicker, breathing walls, the light pool) and `wrap(pos)` for
+an endless floor. `ctx` lets a scene change the objective, write the readout line, and play the
+synthesized sounds (`walk/sound.js`: hum, chime, drip, groan, ping), which follow the SOUND
+toggle. `?chapter=C` in the URL makes START open on that room.
 
 ### Built for phones
 
@@ -92,11 +127,12 @@ loading screen.
   the video never stutters.
 - **The room is built while you read the caption**, and its shaders are compiled then, so NEXT
   drops straight in.
-- **One draw call per material**: geometry is merged per material (`walk/build.js`), which puts
-  the dining room at ~30 draw calls / ~8k triangles and the hallway at ~16 / ~1.3k.
-- **Static shadow maps**: the dining room's two shadow-casting lamps render their shadow maps
-  once per walk; the hallway uses a constant pool of three lights that re-park on the nearest
-  fluorescent panels as you walk, so the shaders never recompile.
+- **One draw call per material**: geometry is merged per material (`walk/build.js`), and the
+  trampoline park's cell is instanced. Draw calls per room run from 13 (teal) to 41 (the grocery
+  maze with its floor reflection); every room keeps a constant number of lights.
+- **Static shadow maps**: the rooms with shadow-casting lamps render their shadow maps once per
+  walk; the long rooms use a constant pool of lights that re-park on the nearest fixtures as you
+  walk, so the shaders never recompile.
 - **Adaptive resolution**: the pixel ratio drops when frames run long and climbs back when
   there is headroom. No post-processing pass; AgX tone mapping in the renderer.
 - Collision is circle-vs-box sliding (everything in these rooms is a box), and a portrait phone
@@ -106,16 +142,23 @@ loading screen.
 
 ### Testing
 
-`tools/walk_test.mjs` drives the real page in headless Chromium (software WebGL): through the
-gate and START, into room A, NEXT into the dining room, screenshots, keyboard walking, collision
-against the table, the walk to the stairs and the exit, the loading screen for B, then the
-hallway and the loading screen for C. It reports draw calls, triangles and console errors, and
-writes `tools/out/*.png` and `report.json` (git-ignored).
+`tools/walk_test.mjs` drives the real page in headless Chromium (software WebGL). For every
+chapter it opens `index.html?chapter=<id>`, goes through the gate and START, ends the caption,
+presses NEXT, and drives the room with deterministic steps: screenshots, the room's own checks
+(the table and the black doorway block, the watch runs backward, you wake up low and stand, the
+grid pulses, the drips fall, the park wraps and the chime brings the glow, the maze has a route
+and the light row flickers), the scripted route to the exit, and then that the right loading
+clip (or the title card, after the grocery store) follows. It reports draw calls, triangles and
+console errors, and writes `tools/out/*.png` and `report.json` (git-ignored).
 
 ```bash
-node tools/walk_test.mjs            # desktop viewport
-node tools/walk_test.mjs --mobile   # 390×844, touch, 2× DPR
+node tools/walk_test.mjs                    # desktop viewport, all chapters
+node tools/walk_test.mjs --mobile           # 390×844, touch, 2× DPR
+node tools/walk_test.mjs --scene teal,G     # some chapters (scene id or letter)
+node tools/scene_shot.mjs flooded --view "grate:29,1.62,0,-1.57,-0.3"   # look-dev shots
 ```
+
+`tools/scene.html?scene=<id>` runs a room on its own (what `scene_shot.mjs` drives).
 
 Playwright and Chromium are found at their usual global locations (`CHROMIUM=` overrides).
 
@@ -128,11 +171,13 @@ Playwright and Chromium are found at their usual global locations (`CHROMIUM=` o
 - `script.js` — the `CHAPTERS` array (captions, log entries, titles, filenames, walk scene ids)
   and the state machine that drives home → load → glitch → room → next → walk → load.
 - `walk/walk.js` — the walk runtime: renderer, scene registry, prepare/start/skip, adaptive
-  resolution, the exit animation. `walk/controls.js` (movement, look, touch), `walk/build.js`
-  (materials, batching, colliders), `walk/textures.js` (procedural maps),
-  `walk/scenes/dining.js`, `walk/scenes/hallway.js`.
+  resolution, the exit animation, the scene context. `walk/controls.js` (movement, look, touch,
+  head bob), `walk/build.js` (materials, batching, instancing, the mirrored floor, colliders),
+  `walk/textures.js` (procedural maps and canvas paintings), `walk/sound.js` (synthesized
+  sounds), and the rooms in `walk/scenes/`: `dining`, `hallway`, `teal` and `teal2` (sharing
+  `teal_common.js`), `flooded`, `trampoline`, `grocery`.
 - `vendor/three/` — three.js r160 (MIT) and the three addons the walk uses.
-- `tools/walk_test.mjs` — the browser test.
+- `tools/walk_test.mjs` — the browser test; `tools/scene.html` + `tools/scene_shot.mjs` — the scene viewer.
 - `0.PNG` — the arcade-cabinet home screen.
 - `A.mp4` … `G.mp4` — the seven room videos.
 - `a.MP4` … `g.MP4` — the seven loading-screen clips, one per room.
