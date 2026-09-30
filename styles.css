@@ -782,6 +782,8 @@ body.notes-open .notes-tab-handle { right: min(33vw, 420px); }
 
   .reel-header { top: 10vh; }
   .next-btn { bottom: 6vh; padding: 0.8rem 1.5rem; }
+  .walk-objective { top: 11vh; font-size: clamp(1rem, 5vw, 1.4rem); }
+  .walk-hint { bottom: 5vh; font-size: 0.6rem; letter-spacing: 0.18em; }
   .notes-tab-handle,
   .skip-tab-handle {
     top: auto;
