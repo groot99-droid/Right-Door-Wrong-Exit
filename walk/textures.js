@@ -290,6 +290,76 @@ export function backroomsWall(size, { seed = 6, tile = 3.0 } = {}) {
   };
 }
 
+// The hallway's wall from the room clip: pale grey-beige plaster with a faint printed plaid
+// (thin lines on a 10 cm grid, a heavier one every fifth) under grime clouds and a few drips.
+export function plaidWall(size, { color = '#d3cbb9', line = '#b9b09e', seed = 66, tile = 1.5 } = {}) {
+  const base = hexToRgb(color), ln = hexToRgb(line);
+  const rgba = new Uint8ClampedArray(size * size * 4);
+  const height = new Float32Array(size * size);
+  const rough = new Float32Array(size * size);
+  const cells = 15; // 10 cm lines on a 1.5 m tile
+  for (let y = 0; y < size; y++) {
+    const v = y / size;
+    for (let x = 0; x < size; x++) {
+      const u = x / size;
+      const fu = (u * cells) % 1, fv = (v * cells) % 1;
+      const cu = Math.floor(u * cells), cv = Math.floor(v * cells);
+      const w = 0.03;
+      const thin = Math.min(fu, 1 - fu) < w || Math.min(fv, 1 - fv) < w ? 0.4 : 0;
+      const heavy = ((cu % 5 === 0) && Math.min(fu, 1 - fu) < w * 1.5) || ((cv % 5 === 0) && Math.min(fv, 1 - fv) < w * 1.5) ? 1 : 0;
+      const l = Math.max(thin, heavy);
+      const peel = fbm(u, v, 48, 3, seed, 0.5);
+      const cloud = fbm(u, v, 3, 3, seed + 5);
+      const grime = fbm(u, v, 2, 3, seed + 11);
+      const streak = fbm(u, v * 0.2, 1, 2, seed + 13);
+      const tone = (1 + (cloud - 0.5) * 0.1 - Math.max(0, grime - 0.5) * 0.3) * (1 - Math.max(0, streak - 0.65) * 0.25);
+      const c = mixRgb(base, ln, l * 0.35);
+      height[y * size + x] = peel * 0.9 + (1 - l) * 0.1;
+      rough[y * size + x] = 0.85 + (peel - 0.5) * 0.15;
+      writeRgb(rgba, (y * size + x) * 4, c[0] * tone, c[1] * tone, c[2] * tone);
+    }
+  }
+  return {
+    map: dataTexture(rgba, size, { srgb: true }),
+    normalMap: dataTexture(heightToNormal(height, size, size / 500), size),
+    roughnessMap: dataTexture(greyMap(rough, size), size),
+    tile,
+  };
+}
+
+// The hallway's carpet from the clip: a worn tan pile with a lattice of small dark diamonds.
+export function diamondCarpet(size, { color = '#b9a47a', dark = '#6f5c3e', shade = '#8f7c58', seed = 67, tile = 1.0 } = {}) {
+  const base = hexToRgb(color), deep = hexToRgb(dark), sh = hexToRgb(shade);
+  const rgba = new Uint8ClampedArray(size * size * 4);
+  const height = new Float32Array(size * size);
+  const rough = new Float32Array(size * size);
+  const n = 12; // diamonds per metre
+  for (let y = 0; y < size; y++) {
+    const v = y / size;
+    for (let x = 0; x < size; x++) {
+      const u = x / size;
+      const fu = (u * n) % 1 - 0.5, fv = (v * n) % 1 - 0.5;
+      const d = Math.abs(fu) + Math.abs(fv);
+      const dot = d < 0.22 ? 1 : d < 0.3 ? (0.3 - d) / 0.08 : 0;
+      const tufts = fbm(u, v, 80, 3, seed + 3, 0.55);
+      const fibre = noise2(u * size * 0.8, v * size * 0.8, Math.round(size * 0.8), seed + 9);
+      const wear = fbm(u, v, 3, 3, seed);
+      let c = mixRgb(base, sh, Math.max(0, wear - 0.45) * 1.2 + (tufts - 0.5) * 0.5);
+      c = mixRgb(c, deep, dot * 0.85);
+      const h = tufts * 0.6 + fibre * 0.25 + (1 - dot) * 0.15;
+      height[y * size + x] = h;
+      rough[y * size + x] = 0.88 + (fibre - 0.5) * 0.1;
+      writeRgb(rgba, (y * size + x) * 4, c[0], c[1], c[2]);
+    }
+  }
+  return {
+    map: dataTexture(rgba, size, { srgb: true }),
+    normalMap: dataTexture(heightToNormal(height, size, size / 110), size),
+    roughnessMap: dataTexture(greyMap(rough, size), size),
+    tile,
+  };
+}
+
 // Faded family photo: a warm sepia print with soft, unreadable figures in the middle
 // distance. Every frame on the wall gets a different seed, so no two are alike.
 export function photo(size, { seed = 7, warm = true } = {}) {

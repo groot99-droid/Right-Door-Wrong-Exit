@@ -7,7 +7,7 @@
 // gets louder. Get through the arch before it finishes.
 import * as THREE from 'three';
 import * as T from '../textures.js';
-import { pbr, place, box, cyl, sphere, createBuilder } from '../build.js';
+import { pbr, place, box, cyl, sphere, createBuilder, cycle } from '../build.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { tealMaterials, plantTall } from './teal_common.js';
 
@@ -20,6 +20,10 @@ export const meta = {
 };
 
 const ROOM = { w: 3.8, d: 6.6, h: 2.6 }; // x: ±1.9, z: ±3.3
+// The clip is a slow, low push toward the arch, the leaves stirring and the arch's edge
+// alive. In the room: the arch keeps growing (and snaps back: the room is rebuilding itself)
+// on an ARCH_PERIOD cycle, the plant sways, and as you wake you drift toward the arch.
+const ARCH_PERIOD = 40, ARCH_GROW = 0.06, PUSH = 0.3, PUSH_T = 1.4;
 
 // The back wall around an arched opening: two piers, and above the arch a slab whose
 // underside is the semicircle, extruded to the wall's thickness.
@@ -38,8 +42,12 @@ function archWall(B, M, { x, z, w, h, rise, roomH, thick, roomW }) {
   shape.lineTo(w / 2, rise);
   shape.absarc(0, rise, w / 2, 0, Math.PI, false);
   const geo = new THREE.ExtrudeGeometry(shape, { depth: thick, bevelEnabled: false, curveSegments: 18 });
-  B.add(geo, M.wall, place(x, 0, z - thick));
-  return crown;
+  // the slab over the arch is its own group so it can grow (one extra draw call)
+  const AB = createBuilder();
+  AB.add(geo, M.wall, place(x, 0, z - thick));
+  const arch = AB.finish().group;
+  B.object(arch);
+  return { crown, arch };
 }
 
 export async function build({ quality, yieldFrame }) {
@@ -61,7 +69,7 @@ export async function build({ quality, yieldFrame }) {
   shellB.add(box(TH, h, d + 2 * TH), M.wall, place(hx + TH / 2, h / 2, 0));
   shellB.add(box(w, h, TH), M.wall, place(0, h / 2, hz + TH / 2));
   const AX = 0.8, AW = 0.9, ARISE = 1.55;
-  archWall(shellB, M, { x: AX, z: -hz, w: AW, h, rise: ARISE, roomH: h, thick: TH, roomW: w });
+  const { arch } = archWall(shellB, M, { x: AX, z: -hz, w: AW, h, rise: ARISE, roomH: h, thick: TH, roomW: w });
   for (const c of shellB.colliders) B.colliders.push(c);
   // the black corridor beyond the arch: walkable, and nothing in it
   const VD = 1.6;
@@ -82,7 +90,7 @@ export async function build({ quality, yieldFrame }) {
   B.collider(SX, SZ, 1.1, 2.7);
 
   // the tall plant right of the arch
-  plantTall(B, M, hx - 0.45, -hz + 0.55);
+  const leaves = plantTall(B, M, hx - 0.45, -hz + 0.55);
 
   // flush dome light
   B.add(sphere(0.17, 20, 10), M.domeLight, place(0, h + 0.03, -0.6));
@@ -148,6 +156,20 @@ export async function build({ quality, yieldFrame }) {
   function update(p, dt, camera, ctx) {
     if (dt === undefined) return;
     elapsed += dt;
+    // waking up: the slow low push of the clip, toward the arch
+    if (elapsed < PUSH_T && !ctx.reduced) {
+      const dx = AX - p.x, dz = -hz - p.z, l = Math.hypot(dx, dz) || 1;
+      const step = (PUSH / PUSH_T) * dt;
+      p.x += dx / l * step; p.z += dz / l * step;
+    }
+    // the arch grows a little more every moment, and snaps back: the room is still being built
+    if (!ctx.reduced) arch.scale.y = 1 + ARCH_GROW * cycle(elapsed, ARCH_PERIOD);
+    // the plant stirs: three leaf clusters on slow sines, each with its own phase
+    for (const g of leaves) {
+      const ph = g.userData.phase;
+      g.rotation.z = Math.sin(elapsed * 0.7 + ph) * 0.035;
+      g.rotation.x = Math.sin(elapsed * 0.5 + ph * 1.7) * 0.03;
+    }
     // the grid pulses, brighter as time runs out
     const pulse = 0.75 + 0.35 * Math.sin(elapsed * 4.2) + Math.min(0.8, elapsed / 50);
     M.grid.emissiveIntensity = pulse;
@@ -187,6 +209,6 @@ export async function build({ quality, yieldFrame }) {
     fog: new THREE.FogExp2(0x03100f, 0.03),
     background: 0x000000,
     exposure: 1.0,
-    debug: { patches, shell, grid: M.grid },
+    debug: { patches, shell, grid: M.grid, arch, leaves, ARCH_PERIOD },
   };
 }

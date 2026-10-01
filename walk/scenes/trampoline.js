@@ -9,7 +9,7 @@
 // (the next loading clip's radar finds it). Head for it.
 import * as THREE from 'three';
 import * as T from '../textures.js';
-import { pbr, place, box, cyl, createBuilder, repeat } from '../build.js';
+import { pbr, place, box, cyl, createBuilder, repeat, stutter } from '../build.js';
 
 export const meta = {
   id: 'trampoline',
@@ -25,6 +25,9 @@ const CELL = ROWS * PZ;                        // 28.2 m along z
 const HALF_W = COLS * PX / 2;                  // 7.07 m
 const CEIL = 8.2;
 const CHIME_AT = 110;                          // metres walked before the anomaly appears
+const LED_I = 5;                               // the LED panels' glow; the clip has them pulsing
+// padded columns stand among the beds, on frame intersections: (column index, row) per cell
+const COLUMNS = [[1, 2], [5, 2], [1, 7], [5, 7]];
 
 export async function build({ quality, yieldFrame }) {
   const S = quality.texSize;
@@ -47,9 +50,9 @@ export async function build({ quality, yieldFrame }) {
     edge: pbr(null, { name: 'edge_yellow', color: '#f6dc4a', roughness: 0.6, env: 0.3, emissive: '#6a5a10', emissiveIntensity: 0.6, castShadow: false }),
     pit: pbr(null, { name: 'pit', color: '#0a0a0b', roughness: 1, env: 0, castShadow: false }),
     concrete: pbr(concrete, { name: 'concrete', roughness: 0.85, env: 0.2, normalScale: 0.4, castShadow: false }),
-    truss: pbr(null, { name: 'truss', color: '#1c1c20', roughness: 0.6, metalness: 0.6, env: 0.4, castShadow: false }),
-    deck: pbr(null, { name: 'deck', color: '#0d0d10', roughness: 0.9, env: 0.05, castShadow: false }),
-    led: pbr(null, { name: 'led', color: '#ffffff', roughness: 0.6, env: 0, emissive: '#fff2dc', emissiveIntensity: 5, castShadow: false }),
+    truss: pbr(null, { name: 'truss', color: '#2a2622', roughness: 0.6, metalness: 0.5, env: 0.4, castShadow: false }),
+    deck: pbr(null, { name: 'deck', color: '#1b1815', roughness: 0.9, env: 0.08, castShadow: false }),
+    led: pbr(null, { name: 'led', color: '#ffffff', roughness: 0.6, env: 0, emissive: '#fff2dc', emissiveIntensity: LED_I, castShadow: false }),
     column: pbr(pad, { name: 'column_pad', roughness: 0.55, env: 0.35, normalScale: 0.5, worldUV: false }),
     band: pbr(null, { name: 'column_band', color: '#e2d38c', roughness: 0.6, env: 0.3 }),
     wallMesh: pbr(bed, { name: 'wall_mesh', color: '#2a2a2e', roughness: 0.75, env: 0.2, normalScale: 0.4, castShadow: false }),
@@ -71,22 +74,25 @@ export async function build({ quality, yieldFrame }) {
       C.add(box(BED_X + 0.12, 0.012, 0.07), M.edge, place(xc, 0.062, zc + BED_Z / 2 + 0.035));
       C.add(box(0.07, 0.012, BED_Z), M.edge, place(xc - BED_X / 2 - 0.035, 0.062, zc));
       C.add(box(0.07, 0.012, BED_Z), M.edge, place(xc + BED_X / 2 + 0.035, 0.062, zc));
-      // frame pads: the x-running pad of this row (pale every third) and the z-running pad
-      const pale = (c + r) % 3 === 0;
+      // frame pads: the x-running pad of this row (pale yellow every other row, as in the
+      // clip's end pads) and the z-running pad
+      const pale = r % 2 === 1;
       C.add(box(PX, 0.16, FRAME), pale ? M.padPale : M.pad, place(xc, 0.12, zc - PZ / 2));
       C.add(box(FRAME, 0.16, BED_Z), M.pad, place(xc - PX / 2, 0.12, zc));
     }
     C.add(box(FRAME, 0.16, BED_Z), M.pad, place(HALF_W, 0.12, zc));
   }
-  C.add(box(HALF_W * 2 + FRAME, 0.16, FRAME), M.pad, place(0, 0.12, 0));
+  C.add(box(HALF_W * 2 + FRAME, 0.22, 0.5), M.pad, place(0, 0.14, 0.04));
   // the same scuff mark on one pad of every cell
   C.mesh(new THREE.PlaneGeometry(0.9, 0.5), M.scuff, place(-HALF_W + 2.5 * PX, 0.205, -3 * PZ, 0.3, -Math.PI / 2));
-  // padded columns down the left, and angled trampoline walls at both edges
-  for (let k = 0; k < 3; k++) {
-    const zc = -(k + 0.5) * (CELL / 3);
-    C.add(cyl(0.32, 0.32, CEIL, 12, true), M.column, place(-HALF_W - 0.6, CEIL / 2, zc), { uvScale: [3, 6] });
-    C.add(cyl(0.34, 0.34, 0.35, 12, true), M.band, place(-HALF_W - 0.6, 2.2, zc), { uvScale: [1, 1] });
-    C.collider(-HALF_W - 0.6, zc, 0.75, 0.75);
+  // padded columns among the beds (on the frame pads, as in the clip), and angled
+  // trampoline walls at both edges
+  for (const [k, r] of COLUMNS) {
+    const xc = -HALF_W + k * PX, zc = -r * PZ;
+    C.add(cyl(0.3, 0.3, 2.6, 12, true), M.column, place(xc, 1.3, zc), { uvScale: [3, 2] });
+    C.add(cyl(0.32, 0.32, 0.35, 12, true), M.band, place(xc, 2.2, zc), { uvScale: [1, 1] });
+    C.add(box(0.2, CEIL - 2.6, 0.2), M.truss, place(xc, 2.6 + (CEIL - 2.6) / 2, zc)); // the bare post above the padding
+    C.collider(xc, zc, 0.7, 0.7);
   }
   for (const side of [1, -1]) {
     const x = side * (HALF_W + 0.35);
@@ -133,9 +139,10 @@ export async function build({ quality, yieldFrame }) {
 
   // --- lights: a dim warm hall, two panel lights that follow, the anomaly's red ----------------
   const lights = new THREE.Group();
-  lights.add(new THREE.HemisphereLight(0xffe9cf, 0x3a2612, 1.1));
+  lights.add(new THREE.HemisphereLight(0xffe9cf, 0x4a3218, 1.45));
+  const POOL_I = 55;
   const pool = [];
-  for (let i = 0; i < 2; i++) { const l = new THREE.PointLight(0xffe4bd, 55, 30, 2); lights.add(l); pool.push(l); }
+  for (let i = 0; i < 2; i++) { const l = new THREE.PointLight(0xffe4bd, POOL_I, 30, 2); lights.add(l); pool.push(l); }
   const red = new THREE.PointLight(0xff2020, 0, 30, 2);
   lights.add(red);
 
@@ -158,10 +165,16 @@ export async function build({ quality, yieldFrame }) {
 
   const prev = new THREE.Vector3(meta.start.x, 0, meta.start.z);
   const fwd = new THREE.Vector3();
-  let travelled = 0, wrapped = false, readT = 0;
+  let travelled = 0, wrapped = false, readT = 0, elapsed = 0, ledLevel = 1;
   function update(p, dt, camera, ctx) {
     if (dt === undefined) return;
+    elapsed += dt;
     travelled += Math.hypot(p.x - prev.x, p.z - prev.z);
+    // the LED panels pulse, and now and then the whole lattice stutters (the clip's flicker)
+    ledLevel = 0.91 + 0.09 * Math.sin(elapsed * (Math.PI * 2 / 2.3));
+    if (!ctx.reduced && stutter(3, elapsed, 10) < 0.03) ledLevel *= 0.55;
+    M.led.emissiveIntensity = LED_I * ledLevel;
+    pool[0].intensity = pool[1].intensity = POOL_I * (0.7 + 0.3 * ledLevel);
     prev.set(p.x, 0, p.z);
     // the nearest LED panels light you
     const gx = Math.round(p.x / LED_X) * LED_X;
@@ -208,10 +221,10 @@ export async function build({ quality, yieldFrame }) {
     },
     exitLookAt: () => beacon.position.clone(),
     exitDuration: 2.6, exitFadeStart: 0.45,
-    fog: new THREE.FogExp2(0x0d0b09, 0.026),
+    fog: new THREE.FogExp2(0x0d0b09, 0.021),
     background: 0x0d0b09,
     far: 120,
-    exposure: 1.0,
-    debug: { beacon, get travelled() { return travelled; }, CELL, get goalOn() { return goalOn; } },
+    exposure: 1.1,
+    debug: { beacon, led: M.led, get ledLevel() { return ledLevel; }, get travelled() { return travelled; }, CELL, get goalOn() { return goalOn; } },
   };
 }

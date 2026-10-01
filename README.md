@@ -71,11 +71,13 @@ during a walk, as on the loading screens, so a room is never a dead end.
   and four arrow-back chairs, the sideboard with its green ceramic lamp, the wall of family
   photographs, sheer curtains, a light switch, and the dark, steep, green-carpeted stairwell in
   the back wall. Reaching its foot climbs you up towards the door at the top.
-- **`hallway`** — the Hallway, rebuilt from `liminal_hallway_v2.blend`: 36 m of mustard
-  wallpaper, grey carpet and tile ceiling, nine fluorescent panels, nine doors a side (the
-  second on the left is a humming vending machine), outlets, baseboards, and a sign band at the
-  far end that reads THE END. Under the sign a stairwell of mossy pixel-block stone goes
-  **down**, into the shaft of the next loading clip.
+- **`hallway`** — the Hallway, built to its room video: you start on a lower landing at the
+  foot of a short carpeted flight (two wide low treads, then five steps) that climbs into a
+  long, narrow corridor of pale plaid-printed walls, a worn tan diamond-pattern carpet, and
+  surface-mounted twin-tube fluorescents that flicker one at a time while the buzz gets louder
+  the further you walk. At the far end an amber-lit vestibule, its ceiling stacked with light
+  bars, and under it a stairwell of mossy pixel-block stone going **down**, into the shaft of
+  the next loading clip.
 - **`teal`** — Teal Room, Square Door: the clean teal box, cream ceiling, coarse brown flecked
   carpet, the orange angular leather sofa, the plain doorway that is pitch black (it blocks: "it
   just swallows it"), the little blocky plant, and from the log a fake window whose sun never
@@ -107,6 +109,23 @@ during a walk, as on the loading screens, so a room is never a dead end.
   when you come near the cart, and the lit EXIT sign shows over the shelves on the far wall.
   Find the way. The exit closes the loop: a fade, and the title card.
 
+### What moves
+
+Each room video is a fixed-camera, five-second loop with one thing happening in it, and each
+3D room plays the same beat, stretched to a 20–40 s cycle so it comes round whether you rush
+or dawdle (`cycle()` and the hash-driven `stutter()` in `walk/build.js` keep it deterministic;
+`prefers-reduced-motion` turns the strobes into slow fades):
+
+| Room | In the clip | In the room |
+| --- | --- | --- |
+| `dining` | still, then the green lamp clicks off at 4.35 s | every 28 s the lamp clicks off for three seconds (light, bulb and shade), with a switch click |
+| `hallway` | one fluorescent tube at a time greys out and comes back | nine fixtures with a material each, stuttering one at a time; the buzz rises down the hall; the amber bars breathe |
+| `teal` | the black of the doorway lifts for a moment at the end | every 24 s the doorway lifts to charcoal and swallows again; the camera drifts if you stand still |
+| `teal2` | a slow low push toward the arch, the leaves stirring | you drift toward the arch as you stand; the plant sways; the arch keeps growing and snaps back |
+| `flooded` | the water shimmers; the red door is lit, then dark, then stutters on | two water skins scrolled against each other; a 30 s door cycle: lit, dark for a long while, stutter, steady |
+| `trampoline` | the LED lattice pulses and flickers | the LEDs breathe on a 2.3 s sine with a hash-driven stutter; the panel lights follow |
+| `grocery` | the tube rows breathe, with a hard dip and a smaller one | all rows breathe; twice a 9 s loop the store dips (the left row still flickers on its own) |
+
 A chapter names its scene with `walk: '<id>'` in `CHAPTERS`; `walk/walk.js` maps ids to
 `walk/scenes/<id>.js`. A scene module exports `meta` (objective, arrival prompt, start position,
 optionally `riseFrom` to wake up low) and `build({ quality, yieldFrame })`, which returns the
@@ -115,8 +134,8 @@ near-goal boxes, the exit camera path (an array, or a function of where the play
 exit's duration / easing / fade / shake, fog and exposure, and optionally `update(pos, dt,
 camera, ctx)` for animation (drips, flicker, breathing walls, the light pool) and `wrap(pos)` for
 an endless floor. `ctx` lets a scene change the objective, write the readout line, and play the
-synthesized sounds (`walk/sound.js`: hum, chime, drip, groan, ping), which follow the SOUND
-toggle. `?chapter=C` in the URL makes START open on that room.
+synthesized sounds (`walk/sound.js`: hum, buzz, chime, drip, groan, ping, click), which follow
+the SOUND toggle. `?chapter=C` in the URL makes START open on that room.
 
 ### Built for phones
 
@@ -128,7 +147,7 @@ toggle. `?chapter=C` in the URL makes START open on that room.
 - **The room is built while you read the caption**, and its shaders are compiled then, so NEXT
   drops straight in.
 - **One draw call per material**: geometry is merged per material (`walk/build.js`), and the
-  trampoline park's cell is instanced. Draw calls per room run from 13 (teal) to 41 (the grocery
+  trampoline park's cell is instanced. Draw calls per room run from 14 (teal) to 37 (the grocery
   maze with its floor reflection); every room keeps a constant number of lights.
 - **Static shadow maps**: the rooms with shadow-casting lamps render their shadow maps once per
   walk; the long rooms use a constant pool of lights that re-park on the nearest fixtures as you
@@ -147,7 +166,9 @@ chapter it opens `index.html?chapter=<id>`, goes through the gate and START, end
 presses NEXT, and drives the room with deterministic steps: screenshots, the room's own checks
 (the table and the black doorway block, the watch runs backward, you wake up low and stand, the
 grid pulses, the drips fall, the park wraps and the chime brings the glow, the maze has a route
-and the light row flickers), the scripted route to the exit, and then that the right loading
+and the light row flickers, and every room's animation plays: the lamp clicks off, the tubes
+flicker one at a time, the doorway lifts, the arch grows, the red door lights, the LEDs pulse,
+the rows dip), the scripted route to the exit, and then that the right loading
 clip (or the title card, after the grocery store) follows. It reports draw calls, triangles and
 console errors, and writes `tools/out/*.png` and `report.json` (git-ignored).
 

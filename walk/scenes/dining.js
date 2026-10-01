@@ -7,7 +7,7 @@
 // (positive z) looking down -z at the stairs.
 import * as THREE from 'three';
 import * as T from '../textures.js';
-import { pbr, place, box, cyl, sphere, lathe, createBuilder } from '../build.js';
+import { pbr, place, box, cyl, sphere, lathe, createBuilder, cycle } from '../build.js';
 
 export const meta = {
   id: 'dining',
@@ -18,6 +18,9 @@ export const meta = {
 };
 
 const ROOM = { w: 5.4, d: 6.4, h: 2.45 };            // x: ±2.7, z: ±3.2
+// The room video is still for 4.35 of its 5 seconds, then the lamp clicks off. Stretched to
+// the walk: every LAMP_PERIOD seconds the lamp goes dark for LAMP_OFF seconds and clicks back.
+const LAMP_PERIOD = 28, LAMP_OFF_AT = 0.87, LAMP_OFF = 3;
 const STAIR = { x0: -0.55, x1: 0.45, rise: 0.185, run: 0.25, steps: 14, z0: -3.2 };
 
 export async function build({ quality, yieldFrame }) {
@@ -280,13 +283,33 @@ export async function build({ quality, yieldFrame }) {
     new THREE.Vector3(sx, 1.62 + topY, zEnd - 0.25),
   ];
 
+  // --- the lamp clicks off, as in the clip ----------------------------------------------
+  const shadeGlow = M.shade.emissiveIntensity, bulbGlow = M.bulb.emissiveIntensity, lampPower = lamp.intensity;
+  const shadeColor = M.shade.color.clone();
+  let elapsed = 0, lampLevel = 1, lampOn = true;
+  function update(p, dt, camera, ctx) {
+    if (dt === undefined) return;
+    elapsed += dt;
+    const ph = cycle(elapsed, LAMP_PERIOD);
+    const wantOn = !(ph > LAMP_OFF_AT && ph < LAMP_OFF_AT + LAMP_OFF / LAMP_PERIOD);
+    if (wantOn !== lampOn) { lampOn = wantOn; ctx.sound.click(); }
+    // a switch is instant; under reduced motion the lamp fades over a second instead
+    const target = lampOn ? 1 : 0;
+    lampLevel = ctx.reduced ? lampLevel + (target - lampLevel) * Math.min(1, dt * 3) : target;
+    M.shade.emissiveIntensity = shadeGlow * lampLevel;
+    M.bulb.emissiveIntensity = bulbGlow * lampLevel;
+    M.shade.color.copy(shadeColor).multiplyScalar(0.55 + 0.45 * lampLevel);
+    lamp.intensity = lampPower * lampLevel;
+  }
+
   return {
     meta,
-    group, lights, colliders,
+    group, lights, colliders, update,
     bounds: { minX: -hx, maxX: hx, minZ: STAIR.z0 - 0.9, maxZ: hz },
     trigger, nearGoal, exitPath, exitLookAt: new THREE.Vector3(sx, topY + 1.1, zEnd - landD),
     fog: new THREE.FogExp2(0x030303, 0.045),
     background: 0x000000,
     exposure: 1.05,
+    debug: { lamp, get lampLevel() { return lampLevel; }, LAMP_PERIOD, LAMP_OFF_AT },
   };
 }
