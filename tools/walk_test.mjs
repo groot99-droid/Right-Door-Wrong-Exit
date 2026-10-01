@@ -145,6 +145,9 @@ const CHAPTERS = {
     await page.evaluate(W.place, [0.15, 1.2, 0, 0]);
     const t = await page.evaluate(W.walk, ['forward', 120]);
     check('the table blocks the player', t[2] > 0.0, `z ${t[2]}`);
+    // the clip's one event, stretched: once a cycle the lamp clicks off, and clicks back on
+    const lamp = await page.evaluate(async () => { const c = (await import('./walk/walk.js')).debug.current; const d = c.built.debug; const before = d.lamp.intensity; let off = null, on = null; for (let k = 0; k < d.LAMP_PERIOD * 60 + 60; k += 10) { c.sim(1 / 60, 10); if (off === null && d.lamp.intensity === 0) off = k / 60; else if (off !== null && on === null && d.lamp.intensity > 0) on = k / 60; } return { before: +before.toFixed(1), off, on }; });
+    check('the lamp clicks off once a cycle, and back on', lamp.before > 0 && lamp.off !== null && lamp.on !== null, JSON.stringify(lamp));
     await page.evaluate(W.place, [-1.4, -2.9, Math.atan2(-1.35, 0.3), 0]); // forward = (-sin yaw, -cos yaw): toward the stair foot
     await shot(page, 'dining_stairs');
     const e = await page.evaluate(W.forwardUntilExit, [60]);
@@ -152,12 +155,18 @@ const CHAPTERS = {
     const p = await page.evaluate(W.exitProgress, [70]);
     check('the climb goes up', p && p.camY > 1.8, JSON.stringify(p));
     await shot(page, 'dining_climb');
+
   } },
   B: { scene: 'hallway', next: 'c.MP4', async drive(page) {
     const i = await page.evaluate(W.info);
     check('hallway draw calls under 40', i.calls < 40, `${i.calls} calls, ${i.tris} tris`);
     check('hallway objective', i.objective === 'WALK TO THE END', i.objective);
     await shot(page, 'hallway_start');
+    const flight = await page.evaluate(async () => { const c = (await import('./walk/walk.js')).debug.current; const y0 = c.camera.position.y; c.controls.setKeys({ forward: true }); c.sim(1 / 60, 220); c.controls.setKeys({}); c.step(1 / 60, 0); return { y0: +y0.toFixed(2), y1: +c.camera.position.y.toFixed(2), x: +c.controls.position().x.toFixed(2) }; });
+    check('the flight climbs from the landing into the corridor', flight.y0 < 0.8 && flight.y1 > 1.5 && flight.x > 3.4, JSON.stringify(flight));
+    await shot(page, 'hallway_top');
+    const tubes = await page.evaluate(async () => { const c = (await import('./walk/walk.js')).debug.current; const d = c.built.debug; let dips = 0, two = 0; for (let k = 0; k < 600; k++) { c.sim(1 / 60, 1); const low = d.levels.filter((l) => l < 1).length; if (low > 0) dips++; if (low > 1) two++; } return { dips, two }; });
+    check('the tubes flicker one at a time', tubes.dips > 0 && tubes.two < tubes.dips, JSON.stringify(tubes));
     await page.evaluate(W.place, [31, 0, -Math.PI / 2, 0]);
     await shot(page, 'hallway_end');
     const e = await page.evaluate(W.forwardUntilExit, [80]);
@@ -177,6 +186,8 @@ const CHAPTERS = {
     await page.evaluate(W.place, [1.35, -2.0, 0, 0]);
     const d = await page.evaluate(W.walk, ['forward', 150]);
     check('the black doorway swallows nothing: it blocks', d[2] > -3.45, `z ${d[2]}`);
+    const door = await page.evaluate(async () => { const c = (await import('./walk/walk.js')).debug.current; const d = c.built.debug; let peak = 0; for (let k = 0; k < d.DOOR_PERIOD * 60; k += 6) { c.sim(1 / 60, 6); peak = Math.max(peak, d.doorLift); } return { peak, colour: d.voidFace.color.getHexString() }; });
+    check('the dark in the doorway lifts once a cycle', door.peak > 0.9, JSON.stringify(door));
     await page.evaluate(W.place, [-0.9, -1.0, 0, 0]);
     await shot(page, 'teal_sofa');
     const e = await page.evaluate(W.forwardUntilExit, [60]);
@@ -196,6 +207,8 @@ const CHAPTERS = {
     check('and stand up', y1 > 1.55, `camera y ${y1.toFixed(2)}`);
     const glow = await page.evaluate(async () => { const c = (await import('./walk/walk.js')).debug.current; const a = c.built.debug.grid.emissiveIntensity; c.sim(1 / 60, 25); return [a, c.built.debug.grid.emissiveIntensity]; });
     check('the grid pulses', Math.abs(glow[0] - glow[1]) > 0.01, glow.map((v) => v.toFixed(2)).join(' -> '));
+    const mut = await page.evaluate(async () => { const c = (await import('./walk/walk.js')).debug.current; const d = c.built.debug; const r0 = d.leaves[0].rotation.z, s0 = d.arch.scale.y; c.sim(1 / 60, 10 * 60); return { leafDelta: +Math.abs(d.leaves[0].rotation.z - r0).toFixed(4), arch: [+s0.toFixed(3), +d.arch.scale.y.toFixed(3)] }; });
+    check('the plant sways and the arch grows', mut.leafDelta > 0.001 && Math.abs(mut.arch[1] - mut.arch[0]) > 0.005, JSON.stringify(mut));
     await page.evaluate(W.place, [0.8, -1.2, 0, 0]);
     await shot(page, 'teal2_arch');
     const e = await page.evaluate(W.forwardUntilExit, [60]);
@@ -208,6 +221,9 @@ const CHAPTERS = {
     await shot(page, 'flooded_start');
     const drips = await page.evaluate(async () => { const c = (await import('./walk/walk.js')).debug.current; const a = c.built.debug.cubes.instanceMatrix.array.slice(0, 16 * 4); c.sim(1 / 60, 30); const b = c.built.debug.cubes.instanceMatrix.array.slice(0, 16 * 4); let diff = 0; for (let k = 0; k < a.length; k++) diff += Math.abs(a[k] - b[k]); return diff; });
     check('the drips fall', drips > 0.01, `matrix change ${drips.toFixed(3)}`);
+    // over one full cycle the door is dark for most of it, and bright for the rest
+    const door = await page.evaluate(async () => { const c = (await import('./walk/walk.js')).debug.current; const d = c.built.debug; let dark = 0, lit = 0, n = 0; for (let k = 0; k < d.DOOR_PERIOD * 60; k += 6) { c.sim(1 / 60, 6); n++; if (d.doorLevel < 0.1) dark++; else if (d.doorLevel > 0.8) lit++; } return { dark: +(dark / n).toFixed(2), lit: +(lit / n).toFixed(2) }; });
+    check('the red door is dark for most of its cycle, then lights up', door.dark > 0.5 && door.lit > 0.2, JSON.stringify(door));
     await page.evaluate(W.place, [28.6, 0.4, -Math.PI / 2, -0.35]);
     await shot(page, 'flooded_grate');
     const e = await page.evaluate(W.forwardUntilExit, [60]);
@@ -221,6 +237,8 @@ const CHAPTERS = {
     check('trampoline draw calls under 40', i.calls < 40, `${i.calls} calls, ${i.tris} tris`);
     check('trampoline objective', i.objective === 'KEEP MOVING', i.objective);
     await shot(page, 'trampoline_start');
+    const led = await page.evaluate(async () => { const c = (await import('./walk/walk.js')).debug.current; const d = c.built.debug; let lo = 9, hi = 0; for (let k = 0; k < 180; k++) { c.sim(1 / 60, 1); lo = Math.min(lo, d.led.emissiveIntensity); hi = Math.max(hi, d.led.emissiveIntensity); } return { lo: +lo.toFixed(2), hi: +hi.toFixed(2) }; });
+    check('the LED panels pulse', led.hi - led.lo > 0.3, JSON.stringify(led));
     // 40 m forward: the world wraps, the readout gives up on distance
     const w = await page.evaluate(async () => { const c = (await import('./walk/walk.js')).debug.current; c.controls.setKeys({ forward: true }); c.sim(1 / 60, 1100); c.controls.setKeys({}); c.step(1 / 60, 0); return { pos: c.controls.position().toArray().map((v) => +v.toFixed(2)), travelled: c.built.debug.travelled, readout: document.getElementById('walkReadout').textContent, CELL: c.built.debug.CELL }; });
     check('the park wraps around', w.pos[2] > -1.5 * w.CELL && w.travelled > 36, JSON.stringify(w));
@@ -261,6 +279,8 @@ const CHAPTERS = {
     check('the maze has a route from the doors to the EXIT', maze.pathCells > 20, `${maze.pathCells} cells, ${maze.walls}/${maze.cells} shelving`);
     const fl = await page.evaluate(async () => { const c = (await import('./walk/walk.js')).debug.current; const seenVals = new Set(); for (let k = 0; k < 60; k++) { c.sim(1 / 60, 10); seenVals.add(c.built.debug.stripFlicker.emissiveIntensity.toFixed(2)); } return [...seenVals]; });
     check('the left light row flickers', fl.length >= 2, fl.join(','));
+    const rows = await page.evaluate(async () => { const c = (await import('./walk/walk.js')).debug.current; const d = c.built.debug; let lo = 9, hi = 0; for (let k = 0; k < d.ROW_PERIOD * 60; k += 2) { c.sim(1 / 60, 2); lo = Math.min(lo, d.strip.emissiveIntensity); hi = Math.max(hi, d.strip.emissiveIntensity); } return { lo: +lo.toFixed(2), hi: +hi.toFixed(2) }; });
+    check('the rows breathe and dip', rows.hi > rows.lo * 1.05 && rows.lo < 2, JSON.stringify(rows));
     const cart = await page.evaluate(async () => (await import('./walk/walk.js')).debug.current.built.debug.cart);
     await page.evaluate(W.place, [cart.x - 0.5, cart.z + 4.5, 0.1, 0]);
     await page.evaluate(W.walk, ['forward', 30]);

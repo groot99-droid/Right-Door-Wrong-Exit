@@ -9,7 +9,7 @@
 // gives way, and the next loading clip is the fall down the shaft.
 import * as THREE from 'three';
 import * as T from '../textures.js';
-import { pbr, place, box, cyl, createBuilder, mirrorY } from '../build.js';
+import { pbr, place, box, cyl, createBuilder, mirrorY, cycle, stutter } from '../build.js';
 
 export const meta = {
   id: 'flooded',
@@ -20,14 +20,17 @@ export const meta = {
 
 const LEN = 34, WID = 3.2, HGT = 2.9, RAIL_Y = 0.95, DADO = 1.25;
 const GRATE_X = LEN - 3.4, GRATE_W = 1.0;
+// The clip: the red door is lit for its first half second, dark red-brown until ~3.3 s,
+// then stutters on and stays bright. Stretched to the walk, on a DOOR_PERIOD loop.
+const DOOR_PERIOD = 30, DOOR_LIT = 3, DOOR_DARK_UNTIL = 21, DOOR_STUTTER = 1.2;
 
 export async function build({ quality, yieldFrame }) {
   const S = quality.texSize;
   const s = Math.max(256, S / 2);
 
-  const wallTile = T.tiles(S, { cols: 8, rows: 8, a: '#f6f6f2', b: '#efefe9', grout: '#b5b5ad', groutW: 0.03, seed: 141, tile: 1.2, gloss: 0.28 });
+  const wallTile = T.tiles(S, { cols: 8, rows: 8, a: '#f7f7f3', b: '#f1f1eb', grout: '#d3d3cb', groutW: 0.018, seed: 141, tile: 1.2, gloss: 0.26, relief: 0.7 });
   await yieldFrame();
-  const floorTile = T.tiles(S, { cols: 4, rows: 4, a: '#ede8da', b: '#e6e0d0', grout: '#c9c3b2', groutW: 0.02, seed: 142, tile: 1.2, gloss: 0.2, speckle: 0.003 });
+  const floorTile = T.tiles(S, { cols: 3, rows: 3, a: '#efeadc', b: '#e9e3d3', grout: '#d6d0c0', groutW: 0.012, seed: 142, tile: 1.2, gloss: 0.16, speckle: 0.002, relief: 0.6 });
   await yieldFrame();
   const ceiling = T.plaster(s, { color: '#f4f2ec', seed: 143, tile: 2.4, relief: 0.15 });
   await yieldFrame();
@@ -47,11 +50,13 @@ export async function build({ quality, yieldFrame }) {
     mural: pbr(mural, { name: 'mural', roughness: 0.75, env: 0.2, worldUV: false }),
     ceiling: pbr(ceiling, { name: 'ceiling', roughness: 1, env: 0.2, normalScale: 0.1, castShadow: false }),
     floor: pbr(floorTile, { name: 'floor_tile', roughness: 0.08, env: 1.5, normalScale: 0.25, transparent: true, opacity: 0.8, castShadow: false }),
-    water: pbr({ normalMap: rippleN, tile: 1 }, { name: 'water', color: '#cfe6ee', roughness: 0.03, env: 2.2, normalScale: 0.35, transparent: true, opacity: 0.22, worldUV: false, castShadow: false }),
+    water: pbr({ normalMap: rippleN, tile: 1 }, { name: 'water', color: '#cfe6ee', roughness: 0.03, env: 2.2, normalScale: 0.35, transparent: true, opacity: 0.26, worldUV: false, castShadow: false }),
+    // a second skin with the other ripple map, scrolled the other way: the shimmer of the clip
+    water2: pbr({ normalMap: rippleN2, tile: 1 }, { name: 'water2', color: '#dff0f6', roughness: 0.03, env: 2.0, normalScale: 0.3, transparent: true, opacity: 0.16, worldUV: false, castShadow: false }),
     tactile: pbr(tact, { name: 'tactile', roughness: 0.45, env: 0.5, normalScale: 0.8, worldUV: true, tile: 0.3 }),
     rail: pbr(null, { name: 'rail', color: '#c8ccd2', roughness: 0.28, metalness: 1, env: 1.3 }),
     frame: pbr(null, { name: 'frame', color: '#5a3a22', roughness: 0.5, env: 0.4 }),
-    frameInner: pbr(null, { name: 'frame_inner', color: '#e9e4d8', roughness: 0.9, env: 0.2 }),
+    frameInner: pbr(null, { name: 'frame_inner', color: '#f3f1ea', roughness: 0.9, env: 0.2 }),
     panel: pbr(null, { name: 'light_panel', color: '#ffffff', roughness: 0.6, env: 0, emissive: '#f4f8ff', emissiveIntensity: 3.6, castShadow: false }),
     panelRim: pbr(null, { name: 'panel_rim', color: '#dcdcd6', roughness: 0.5, env: 0.3, castShadow: false }),
     vent: pbr(null, { name: 'vent', color: '#6a6d72', roughness: 0.6, metalness: 0.6, env: 0.6 }),
@@ -91,7 +96,7 @@ export async function build({ quality, yieldFrame }) {
     // dado cap and handrail on brackets
     R.add(box(LEN, 0.03, 0.03), M.rail, place(LEN / 2, DADO + 0.015, side * (hw - 0.015)));
     R.add(cyl(0.02, 0.02, LEN, 10), M.rail, place(LEN / 2, RAIL_Y, side * (hw - 0.09), 0, 0, Math.PI / 2));
-    for (let x = 1.5; x < LEN; x += 3) R.add(box(0.04, 0.05, 0.1), M.rail, place(x, RAIL_Y - 0.02, side * (hw - 0.05)));
+    for (let x = 1.5; x < LEN; x += 1.5) R.add(box(0.04, 0.05, 0.1), M.rail, place(x, RAIL_Y - 0.02, side * (hw - 0.05)));
   }
   R.add(box(TH, HGT, WID + 2 * TH), M.wallTile, place(-TH / 2, HGT / 2, 0));          // behind the player
   // the far end: a red door in the middle of a tiled wall
@@ -120,6 +125,8 @@ export async function build({ quality, yieldFrame }) {
   floorMesh.renderOrder = 2;
   const water = F.mesh(new THREE.PlaneGeometry(LEN, WID), M.water, place(LEN / 2, 0.02, 0, 0, -Math.PI / 2));
   water.renderOrder = 3;
+  const water2 = F.mesh(new THREE.PlaneGeometry(LEN, WID), M.water2, place(LEN / 2, 0.028, 0, 0, -Math.PI / 2));
+  water2.renderOrder = 4;
   F.add(box(LEN - GRATE_W - 0.2, 0.012, 0.3), M.tactile, place((GRATE_X - GRATE_W / 2) / 2, 0.006, 0));
   F.add(box(LEN - GRATE_X - GRATE_W / 2, 0.012, 0.3), M.tactile, place(GRATE_X + GRATE_W / 2 + (LEN - GRATE_X - GRATE_W / 2) / 2, 0.006, 0));
   F.add(box(LEN + 2 * TH, 0.5, WID + 2 * TH), M.void, place(LEN / 2, -3.4, 0)); // under the mirrored room
@@ -175,9 +182,19 @@ export async function build({ quality, yieldFrame }) {
   lights.add(new THREE.HemisphereLight(0xe8f0ff, 0x2a3440, 0.55));
   const pool = [];
   for (let i = 0; i < 3; i++) { const l = new THREE.PointLight(0xeaf2ff, 14, 12, 2); l.position.copy(panels[i]); lights.add(l); pool.push(l); }
-  const red = new THREE.PointLight(0xff2020, 9, 9, 2);
+  const RED_I = 9;
+  const red = new THREE.PointLight(0xff2020, RED_I, 9, 2);
   red.position.set(LEN - 0.6, 1.4, 0);
   lights.add(red);
+  const doorLit = new THREE.Color('#ff3030'), doorDark = new THREE.Color('#4a1212');
+  let doorLevel = 1;
+  function doorAt(t, reduced) {
+    const ph = cycle(t, DOOR_PERIOD) * DOOR_PERIOD;
+    if (ph < DOOR_LIT) return reduced ? 1 : 1 - Math.max(0, (ph - DOOR_LIT + 0.3) / 0.3);
+    if (ph < DOOR_DARK_UNTIL) return reduced ? Math.max(0, 1 - (ph - DOOR_LIT)) : 0;
+    if (ph < DOOR_DARK_UNTIL + DOOR_STUTTER) return reduced ? (ph - DOOR_DARK_UNTIL) / DOOR_STUTTER : (stutter(5, ph, 12) > 0.45 ? 1 : 0.08);
+    return 0.9 + 0.1 * Math.sin(ph * 2.4);
+  }
 
   // --- the goal ---------------------------------------------------------------------------------
   const trigger = { minX: GRATE_X - 0.18, maxX: GRATE_X + 0.3, minZ: -hw, maxZ: hw };
@@ -192,8 +209,16 @@ export async function build({ quality, yieldFrame }) {
     // lights follow the player down the hall
     const sorted = panels.slice().sort((a, b) => Math.abs(a.x - p.x) - Math.abs(b.x - p.x));
     for (let i = 0; i < pool.length; i++) pool[i].position.copy(sorted[i]);
-    // the water moves
+    // the water moves: two skins, scrolled against each other
     rippleN.offset.x += dt * 0.012; rippleN.offset.y += dt * 0.006;
+    rippleN2.offset.x -= dt * 0.009; rippleN2.offset.y += dt * 0.014;
+    // the red door: lit, then dark for a long while, then it stutters on and stays on
+    doorLevel = doorAt(elapsed, ctx.reduced);
+    M.door.color.copy(doorDark).lerp(doorLit, doorLevel);
+    M.door.emissiveIntensity = 0.05 + 0.85 * doorLevel;
+    red.intensity = RED_I * doorLevel;
+    // the ceiling panels breathe a little
+    M.panel.emissiveIntensity = 3.6 * (1 + 0.03 * Math.sin(elapsed * 1.7));
     // the grate feels soft underfoot
     if (!falling) {
       if (p.x > softZone.minX && p.x < softZone.maxX) {
@@ -251,9 +276,9 @@ export async function build({ quality, yieldFrame }) {
     exitPath: (from) => [new THREE.Vector3(from.x + 0.05, 1.3, from.z), new THREE.Vector3(from.x + 0.1, -1.4, from.z), new THREE.Vector3(from.x + 0.1, -7.5, from.z)],
     exitLookAt: (from) => new THREE.Vector3(from.x + 0.1, -9, from.z + 0.01),
     exitDuration: 1.7, exitFadeStart: 0.5, exitEase: 'in', exitShake: 0.025, exitTurn: 2.5,
-    fog: new THREE.FogExp2(0x0b1016, 0.028),
+    fog: new THREE.FogExp2(0x0b1016, 0.022),
     background: 0x0b1016,
     exposure: 0.95,
-    debug: { cubes, grate, panels },
+    debug: { cubes, grate, panels, door: M.door, get doorLevel() { return doorLevel; }, DOOR_PERIOD, DOOR_LIT, DOOR_DARK_UNTIL, DOOR_STUTTER },
   };
 }

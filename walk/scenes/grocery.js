@@ -8,7 +8,7 @@
 // the shelves on the far wall. Find the way. The exit closes the loop.
 import * as THREE from 'three';
 import * as T from '../textures.js';
-import { pbr, place, box, cyl, sphere, createBuilder, mirrorY } from '../build.js';
+import { pbr, place, box, cyl, sphere, createBuilder, mirrorY, cycle } from '../build.js';
 
 export const meta = {
   id: 'grocery',
@@ -22,6 +22,10 @@ const COLS = 19, ROWS = 23;              // odd: corridors on odd indices, shelv
 const W = COLS * CELL, D = ROWS * CELL;  // 38 x 46 m
 const HGT = 4.0;
 const SHELF_H = 1.85;
+const SHELF_LOW = 1.4;                   // the perimeter gondolas along the walls are lower
+// The clip's rows breathe, with a hard dip at 3.3 s and a smaller one at 4.6 s of its five.
+// Stretched to the walk: a ROW_PERIOD loop with the two dips at the same proportions.
+const ROW_PERIOD = 9, DIP_A = 3.3 / 5 * 9, DIP_B = 4.6 / 5 * 9, STRIP_I = 3.2;
 
 // A perfect maze on the odd cells (recursive backtracker, seeded), then a few extra
 // openings so there are loops, a clearing in the middle for the cart, the entrance at the
@@ -69,22 +73,22 @@ const cz = (r) => -D / 2 + (r + 0.5) * CELL;
 export async function build({ quality, yieldFrame }) {
   const S = quality.texSize;
   const s = Math.max(256, S / 2);
-  const vinyl = T.tiles(S, { cols: 4, rows: 4, a: '#e9e3d3', b: '#e4ddcc', grout: '#ddd6c5', groutW: 0.012, seed: 221, tile: 1.2, gloss: 0.12, speckle: 0.02 });
+  const vinyl = T.tiles(S, { cols: 4, rows: 4, a: '#e2d9c4', b: '#dcd2bc', grout: '#d2c8b4', groutW: 0.012, seed: 221, tile: 1.2, gloss: 0.1, speckle: 0.02 });
   await yieldFrame();
-  const acoustic = T.tiles(s, { cols: 4, rows: 4, a: '#eeece4', b: '#e8e6dd', grout: '#c9c6ba', groutW: 0.03, seed: 222, tile: 2.4, gloss: 0.9, speckle: 0.05, relief: 0.4 });
+  const acoustic = T.tiles(s, { cols: 4, rows: 4, a: '#dcd2bf', b: '#d5cab6', grout: '#b7ad9a', groutW: 0.03, seed: 222, tile: 2.4, gloss: 0.9, speckle: 0.05, relief: 0.4 });
   await yieldFrame();
-  const paint = T.plaster(s, { color: '#e6e0d2', seed: 223, tile: 3.0, relief: 0.2 });
+  const paint = T.plaster(s, { color: '#d9d0bf', seed: 223, tile: 3.0, relief: 0.2 });
   await yieldFrame();
   const tape = T.cautionTape();
   const exitTex = T.exitSign();
 
   const M = {
-    floor: pbr(vinyl, { name: 'vinyl', roughness: 0.1, env: 1.6, normalScale: 0.15, transparent: true, opacity: 0.86, castShadow: false }),
+    floor: pbr(vinyl, { name: 'vinyl', roughness: 0.06, env: 1.9, normalScale: 0.12, transparent: true, opacity: 0.82, castShadow: false }),
     ceiling: pbr(acoustic, { name: 'acoustic', roughness: 0.95, env: 0.15, normalScale: 0.5, castShadow: false }),
     wall: pbr(paint, { name: 'wall', roughness: 0.9, env: 0.2, normalScale: 0.3 }),
     column: pbr(paint, { name: 'column', color: '#f0ebe0', roughness: 0.85, env: 0.25, normalScale: 0.3 }),
-    strip: pbr(null, { name: 'strip', color: '#ffffff', roughness: 0.6, env: 0, emissive: '#fff6e6', emissiveIntensity: 3.2, castShadow: false }),
-    stripFlicker: pbr(null, { name: 'strip_flicker', color: '#ffffff', roughness: 0.6, env: 0, emissive: '#fff6e6', emissiveIntensity: 3.2, castShadow: false }),
+    strip: pbr(null, { name: 'strip', color: '#ffffff', roughness: 0.6, env: 0, emissive: '#ffefd4', emissiveIntensity: STRIP_I, castShadow: false }),
+    stripFlicker: pbr(null, { name: 'strip_flicker', color: '#ffffff', roughness: 0.6, env: 0, emissive: '#ffefd4', emissiveIntensity: STRIP_I, castShadow: false }),
     stripHousing: pbr(null, { name: 'strip_housing', color: '#d5d2c8', roughness: 0.5, env: 0.3, castShadow: false }),
     gondola: pbr(null, { name: 'gondola', color: '#b9b8b2', roughness: 0.5, metalness: 0.4, env: 0.7 }),
     gondolaBack: pbr(null, { name: 'gondola_back', color: '#a3a29c', roughness: 0.7, metalness: 0.2, env: 0.4 }),
@@ -151,16 +155,16 @@ export async function build({ quality, yieldFrame }) {
 
   // --- the shelving maze ---------------------------------------------------------------------
   const colliders = [];
-  const unit = (x, z, alongZ, len) => {
+  const unit = (x, z, alongZ, len, H = SHELF_H) => {
     const L = len, Dp = 1.2;
     const rot = alongZ ? Math.PI / 2 : 0;
     const at = (lx, ly, lz) => place(x, ly, z, rot).multiply(place(lx, 0, lz));
     R.add(box(L, 0.12, Dp), M.kick, at(0, 0.06, 0));
-    R.add(box(L, SHELF_H, 0.06), M.gondolaBack, at(0, SHELF_H / 2, 0));
-    for (let k = 0; k < 5; k++) R.add(box(L, 0.03, Dp), M.gondola, at(0, 0.16 + k * 0.4, 0));
-    R.add(box(0.04, SHELF_H, Dp), M.gondola, at(-L / 2 + 0.02, SHELF_H / 2, 0));
-    R.add(box(0.04, SHELF_H, Dp), M.gondola, at(L / 2 - 0.02, SHELF_H / 2, 0));
-    R.add(box(L, 0.05, Dp), M.gondola, at(0, SHELF_H + 0.02, 0));
+    R.add(box(L, H, 0.06), M.gondolaBack, at(0, H / 2, 0));
+    for (let k = 0; k * 0.4 + 0.16 < H - 0.1; k++) R.add(box(L, 0.03, Dp), M.gondola, at(0, 0.16 + k * 0.4, 0));
+    R.add(box(0.04, H, Dp), M.gondola, at(-L / 2 + 0.02, H / 2, 0));
+    R.add(box(0.04, H, Dp), M.gondola, at(L / 2 - 0.02, H / 2, 0));
+    R.add(box(L, 0.05, Dp), M.gondola, at(0, H + 0.02, 0));
   };
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
@@ -171,7 +175,8 @@ export async function build({ quality, yieldFrame }) {
       const n = r > 0 && wall[r - 1][c], sth = r < ROWS - 1 && wall[r + 1][c];
       const e = c < COLS - 1 && wall[r][c + 1], w = c > 0 && wall[r][c - 1];
       const alongZ = (n || sth) && !(e || w) ? true : (e || w) && !(n || sth) ? false : (r === 0 || r === ROWS - 1) ? false : (c === 0 || c === COLS - 1);
-      unit(cx(c), cz(r), alongZ, CELL);
+      const perimeter = r === 0 || r === ROWS - 1 || c === 0 || c === COLS - 1;
+      unit(cx(c), cz(r), alongZ, CELL, perimeter ? SHELF_LOW : SHELF_H);
     }
   }
 
@@ -209,24 +214,30 @@ export async function build({ quality, yieldFrame }) {
       R.add(cyl(0.05, 0.05, 0.03, 10), M.wheel, place(bx + dx, 0.05, bz + dz, 0, Math.PI / 2));
     }
     colliders.push({ minX: bx - 0.55, maxX: bx + 0.55, minZ: bz - 0.4, maxZ: bz + 0.4 });
-    // stanchions on a square, tape sagging between them
-    const posts = [[-1.5, -1.5], [1.5, -1.5], [1.5, 1.5], [-1.5, 1.5]].map(([dx, dz]) => [bx + dx, bz + dz]);
-    for (const [px, pz] of posts) {
-      R.add(cyl(0.02, 0.02, 0.95, 8), M.chrome, place(px, 0.5, pz));
+    // roped off as in the clip: a chrome railing on the left, two stanchions on the right,
+    // and one length of caution tape sagging from the railing past the cart to the posts
+    const post = (px, pz, h = 0.95) => {
+      R.add(cyl(0.02, 0.02, h, 8), M.chrome, place(px, h / 2, pz));
       R.add(cyl(0.16, 0.18, 0.03, 12), M.chrome, place(px, 0.015, pz));
-      R.add(sphere(0.035, 8, 6), M.chrome, place(px, 0.98, pz));
+      R.add(sphere(0.035, 8, 6), M.chrome, place(px, h + 0.03, pz));
       colliders.push({ minX: px - 0.15, maxX: px + 0.15, minZ: pz - 0.15, maxZ: pz + 0.15 });
-    }
-    for (let i = 0; i < 4; i++) {
-      const [ax, az] = posts[i], [bx2, bz2] = posts[(i + 1) % 4];
+    };
+    const railA = [bx - 2.4, bz + 1.9], railB = [bx - 2.4, bz + 0.3];
+    post(railA[0], railA[1], 1.0); post(railB[0], railB[1], 1.0);
+    for (const y of [0.55, 0.98]) R.add(cyl(0.016, 0.016, railA[1] - railB[1], 8), M.chrome, place(railA[0], y, (railA[1] + railB[1]) / 2, 0, Math.PI / 2));
+    colliders.push({ minX: railA[0] - 0.08, maxX: railA[0] + 0.08, minZ: railB[1], maxZ: railA[1] });
+    const postA = [bx + 1.3, bz + 1.9], postB = [bx + 2.7, bz + 1.1];
+    post(postA[0], postA[1]); post(postB[0], postB[1]);
+    const tapeRun = [[railA, postA, 0.9, 0.2], [postA, postB, 0.85, 0.1]];
+    for (const [[ax, az], [bx2, bz2], y, sag] of tapeRun) {
       const len = Math.hypot(bx2 - ax, bz2 - az);
       const g = new THREE.PlaneGeometry(len, 0.07, 14, 1);
       const pos = g.attributes.position;
-      for (let k = 0; k < pos.count; k++) { const u = pos.getX(k) / len + 0.5; pos.setY(k, pos.getY(k) - 0.16 * (1 - Math.pow(2 * u - 1, 2))); }
+      for (let k = 0; k < pos.count; k++) { const u = pos.getX(k) / len + 0.5; pos.setY(k, pos.getY(k) - sag * (1 - Math.pow(2 * u - 1, 2))); }
       const uv = g.attributes.uv;
       for (let k = 0; k < uv.count; k++) uv.setXY(k, uv.getX(k) * (len / 0.75), uv.getY(k));
       const ang = Math.atan2(-(bz2 - az), bx2 - ax);
-      R.mesh(g, M.tape, place((ax + bx2) / 2, 0.9, (az + bz2) / 2, ang));
+      R.mesh(g, M.tape, place((ax + bx2) / 2, y, (az + bz2) / 2, ang));
     }
   }
 
@@ -246,9 +257,10 @@ export async function build({ quality, yieldFrame }) {
 
   // --- lights ------------------------------------------------------------------------------------
   const lights = new THREE.Group();
-  lights.add(new THREE.HemisphereLight(0xfff3e0, 0xb3a894, 1.1)); // the ground tone also lights the ceiling's underside
+  lights.add(new THREE.HemisphereLight(0xf8e4c6, 0x9c8c74, 1.0)); // the ground tone also lights the ceiling's underside
+  const POOL_I = 30;
   const pool = [];
-  for (let i = 0; i < 4; i++) { const l = new THREE.PointLight(0xfff1dc, 30, 20, 2); lights.add(l); pool.push(l); }
+  for (let i = 0; i < 4; i++) { const l = new THREE.PointLight(0xffe9cc, POOL_I, 20, 2); lights.add(l); pool.push(l); }
   const flickerLight = new THREE.PointLight(0xfff1dc, 20, 16, 2);
   flickerLight.position.set(-16, HGT - 0.4, 0);
   lights.add(flickerLight);
@@ -260,10 +272,18 @@ export async function build({ quality, yieldFrame }) {
   const trigger = { minX: EXIT_X - 0.6, maxX: EXIT_X + 0.6, minZ: EXIT_Z - 0.2, maxZ: EXIT_Z + 0.55 };
   const nearGoal = { minX: EXIT_X - 2.5, maxX: EXIT_X + 2.5, minZ: EXIT_Z - 0.2, maxZ: EXIT_Z + 4 };
 
-  let elapsed = 0, pinged = false, flickT = 0, flickState = 1;
+  let elapsed = 0, pinged = false, flickT = 0, flickState = 1, rowLevel = 1;
   function update(p, dt, camera, ctx) {
     if (dt === undefined) return;
     elapsed += dt;
+    // every row breathes, and twice a loop the whole store dips (the clip's two beats)
+    const rp = cycle(elapsed, ROW_PERIOD) * ROW_PERIOD;
+    rowLevel = 1 + 0.04 * Math.sin(elapsed * 0.9);
+    if (!ctx.reduced) {
+      if (rp > DIP_A && rp < DIP_A + 0.15) rowLevel *= 0.4;
+      else if (rp > DIP_B && rp < DIP_B + 0.1) rowLevel *= 0.7;
+    }
+    M.strip.emissiveIntensity = STRIP_I * rowLevel;
     // four strip lights follow the player along the rows
     const near = rows.slice().sort((a, b) => Math.abs(a - p.x) - Math.abs(b - p.x));
     const zz = Math.round(p.z / 4) * 4;
@@ -271,6 +291,7 @@ export async function build({ quality, yieldFrame }) {
     pool[1].position.set(near[0], HGT - 0.4, zz + (p.z > zz ? 4 : -4));
     pool[2].position.set(near[1], HGT - 0.4, zz);
     pool[3].position.set(near[1], HGT - 0.4, zz + (p.z > zz ? 4 : -4));
+    for (const l of pool) l.intensity = POOL_I * rowLevel;
     flickerLight.position.z = zz;
     // the left row flickers: a hash-driven stutter every few seconds
     flickT += dt;
@@ -280,8 +301,8 @@ export async function build({ quality, yieldFrame }) {
       const on = ((k * 2654435761) >>> 0) % 7 < 4;
       flickState = on ? 1 : 0.1;
     } else flickState = 1;
-    M.stripFlicker.emissiveIntensity = 3.2 * flickState;
-    flickerLight.intensity = 20 * flickState;
+    M.stripFlicker.emissiveIntensity = STRIP_I * flickState * rowLevel;
+    flickerLight.intensity = 20 * flickState * rowLevel;
     // the anomaly pulses; a chime the first time you come near it
     const dCart = Math.hypot(p.x - CX, p.z - CZ);
     anomaly.intensity = 5 + 3 * Math.sin(elapsed * 2.2);
@@ -297,10 +318,10 @@ export async function build({ quality, yieldFrame }) {
     exitPath: [new THREE.Vector3(EXIT_X, 1.62, EXIT_Z - 0.2), new THREE.Vector3(EXIT_X, 1.62, EXIT_Z - 1.1)],
     exitLookAt: new THREE.Vector3(EXIT_X, 1.5, EXIT_Z - 6),
     exitDuration: 2.0, exitFadeStart: 0.3,
-    fog: new THREE.FogExp2(0xd9d2c2, 0.014),
-    background: 0xd9d2c2,
+    fog: new THREE.FogExp2(0xb9aa90, 0.014),
+    background: 0xb9aa90,
     far: 120,
     exposure: 1.0,
-    debug: { maze, stripFlicker: M.stripFlicker, cart: { x: CX, z: CZ }, exit: { x: EXIT_X, z: EXIT_Z }, cellToWorld: (r, c) => [cx(c), cz(r)] },
+    debug: { maze, stripFlicker: M.stripFlicker, strip: M.strip, get rowLevel() { return rowLevel; }, ROW_PERIOD, DIP_A, cart: { x: CX, z: CZ }, exit: { x: EXIT_X, z: EXIT_Z }, cellToWorld: (r, c) => [cx(c), cz(r)] },
   };
 }

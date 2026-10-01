@@ -191,3 +191,18 @@ export function disposeScene(root) {
     }
   });
 }
+
+// --- deterministic animation helpers ---------------------------------------------------
+// Every flicker in the rooms is driven by these rather than Math.random, so a walk looks the
+// same on every run and the tests can sim it. `stutter` hashes a time bucket (`rate` buckets
+// per second) with a seed into 0..1; `cycle` is the phase 0..1 of a looping event of `period`
+// seconds (the room videos loop every five seconds; the rooms stretch that to 20–40 s).
+export function stutter(seed, t, rate = 24) {
+  const k = (Math.floor(t * rate) + seed * 7919) | 0;
+  const h = (Math.imul(k, 2654435761) ^ (k >>> 15)) >>> 0;
+  return (h % 1000) / 1000;
+}
+
+export function cycle(t, period) {
+  return (((t % period) + period) % period) / period;
+}

@@ -6,6 +6,7 @@ let ctx = null;
 let master = null;
 let enabled = true;
 let humNodes = null;
+let buzzNodes = null;
 
 function context() {
   if (ctx) return ctx;
@@ -133,11 +134,71 @@ export function hum(level) {
   humNodes.b.frequency.setTargetAtTime(52.7 + l * 14.4, t, 0.3);
 }
 
+// The fluorescent buzz of the hallway: a thin 120 Hz sawtooth with its harmonics through a
+// band-pass, so it sits above the hum rather than under it. level 0..1.
+export function buzz(level) {
+  const c = context();
+  if (!c) return;
+  if (!buzzNodes) {
+    const g = c.createGain();
+    g.gain.value = 0.0001;
+    const f = c.createBiquadFilter();
+    f.type = 'bandpass';
+    f.frequency.value = 1400;
+    f.Q.value = 1.2;
+    const a = c.createOscillator(); a.type = 'sawtooth'; a.frequency.value = 120;
+    const b = c.createOscillator(); b.type = 'square'; b.frequency.value = 240.5;
+    const bg = c.createGain(); bg.gain.value = 0.25;
+    a.connect(f); b.connect(bg).connect(f);
+    f.connect(g).connect(master);
+    a.start(); b.start();
+    buzzNodes = { g, f, a, b };
+  }
+  const l = Math.max(0, Math.min(1, level));
+  const t = c.currentTime;
+  buzzNodes.g.gain.setTargetAtTime(0.0001 + l * 0.045, t, 0.2);
+  buzzNodes.f.frequency.setTargetAtTime(900 + l * 1600, t, 0.3);
+}
+
+// A light switch: a short, dry click (a filtered noise burst with a tiny pitched tail).
+export function click() {
+  const c = context();
+  if (!c) return;
+  const t = c.currentTime;
+  const len = 0.03;
+  const buf = c.createBuffer(1, Math.ceil(c.sampleRate * len), c.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 3);
+  const src = c.createBufferSource();
+  src.buffer = buf;
+  const f = c.createBiquadFilter();
+  f.type = 'highpass';
+  f.frequency.value = 1800;
+  const g = c.createGain();
+  g.gain.setValueAtTime(0.35, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + len + 0.02);
+  src.connect(f).connect(g).connect(master);
+  src.start(t);
+  const o = c.createOscillator();
+  const og = c.createGain();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(2600, t);
+  o.frequency.exponentialRampToValueAtTime(900, t + 0.04);
+  env(og, t, 0.002, 0.005, 0.05, 0.08);
+  o.connect(og).connect(master);
+  o.start(t);
+  o.stop(t + 0.1);
+}
+
+// Stops the sustained sounds (the hum and the buzz) when a walk ends.
 export function stopHum() {
-  if (!humNodes || !ctx) return;
+  if (!ctx) return;
   const t = ctx.currentTime;
-  humNodes.g.gain.setTargetAtTime(0.0001, t, 0.1);
-  const n = humNodes;
+  for (const n of [humNodes, buzzNodes]) {
+    if (!n) continue;
+    n.g.gain.setTargetAtTime(0.0001, t, 0.1);
+    setTimeout(() => { try { n.a.stop(); n.b.stop(); } catch (_) { /* ignore */ } }, 600);
+  }
   humNodes = null;
-  setTimeout(() => { try { n.a.stop(); n.b.stop(); } catch (_) { /* ignore */ } }, 600);
+  buzzNodes = null;
 }

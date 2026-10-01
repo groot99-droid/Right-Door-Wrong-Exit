@@ -1,225 +1,218 @@
-// The Hallway — The Descent. Rebuilt from `liminal_hallway_v2.blend`: a 36 m corridor,
-// 3.4 m wide and 2.7 m high, mustard painted walls, grey carpet, a 0.5 x 0.25 m tile
-// ceiling, nine fluorescent panels, nine doors a side (the second on the left replaced
-// by a humming vending machine), outlets, baseboards, and a sign band at the far end
-// that reads THE END. Blender's (x, y, z) become three.js (x, z, -y).
+// The Hallway — The Descent. Built to the room video: you stand on a lower landing at the
+// foot of a short carpeted flight (two wide low treads, then five steps) that climbs into a
+// long, narrow corridor. Pale grey-beige walls with a faint printed plaid, a worn tan carpet
+// with a lattice of dark diamonds, a smooth ceiling with surface-mounted twin-tube
+// fluorescents that flicker one at a time, and at the far end an amber-lit opening whose
+// ceiling is stacked with light bars. Under that opening the stairwell of mossy pixel-block
+// stone goes DOWN, into the shaft of the next loading clip. "The hum of the lights is
+// getting louder."
 import * as THREE from 'three';
 import * as T from '../textures.js';
-import { pbr, place, box, cyl, createBuilder } from '../build.js';
+import { pbr, place, box, cyl, createBuilder, stutter } from '../build.js';
 
 export const meta = {
   id: 'hallway',
   objective: 'WALK TO THE END',
   arrive: 'GO DOWN',
-  start: { x: 1.0, z: 0, yaw: -Math.PI / 2 }, // looking down +x
+  start: { x: -2.1, z: 0, yaw: -Math.PI / 2, pitch: 0.04 }, // on the landing, looking up the flight (+x)
 };
 
-const LEN = 36, WID = 3.4, HGT = 2.7;
-// The stairwell under the sign: it goes DOWN, into the mossy block shaft of the next loading
-// clip. Blender's file ends at the wall; this is the game's exit from it.
+const LEN = 36;                       // x of the end wall: the corridor floor is y = 0 from the top step to here
+const WID = 2.4, HGT = 2.6;
+const LAND = { x0: -3.6, y: -1.1 };   // the lower landing you start on
+const RUNS = [0.95, 0.95, 0.3, 0.3, 0.3, 0.3, 0.3]; // treads: two deep, then five
+const STEP_END = RUNS.reduce((a, b) => a + b, 0);  // x where the corridor floor begins (3.4)
+const RISE = -LAND.y / RUNS.length;
+// the amber vestibule beyond the end wall, and the stairwell down from its far edge
+const VEST = { d: 1.3, w: 1.6, h: 2.3 };
 const WELL = { w: 1.4, h: 1.9, rise: 0.2, run: 0.28, steps: 16, landing: 1.2 };
+const FIXTURES = 9;
+const FIX_X0 = 5.2, FIX_DX = 3.5;      // the first fixture over the top of the flight, then every 3.5 m
 
-function vendTexture() {
-  const c = document.createElement('canvas');
-  c.width = 256; c.height = 512;
-  const g = c.getContext('2d');
-  const grad = g.createLinearGradient(0, 0, 0, 512);
-  grad.addColorStop(0, '#3b6cff'); grad.addColorStop(0.5, '#1f4be0'); grad.addColorStop(1, '#183a9f');
-  g.fillStyle = grad;
-  g.fillRect(0, 0, 256, 512);
-  for (let row = 0; row < 6; row++) {
-    const y = 40 + row * 74;
-    g.fillStyle = 'rgba(0,0,0,0.55)';
-    g.fillRect(14, y + 44, 228, 6); // shelf
-    for (let k = 0; k < 6; k++) {
-      const x = 20 + k * 37;
-      g.fillStyle = k % 2 ? 'rgba(5,10,40,0.75)' : 'rgba(10,20,60,0.65)';
-      g.fillRect(x, y, 24, 44);
-      g.fillStyle = 'rgba(120,170,255,0.35)';
-      g.fillRect(x + 3, y + 4, 5, 36);
-    }
-  }
-  g.fillStyle = 'rgba(0,0,0,0.5)';
-  g.fillRect(0, 0, 256, 14); g.fillRect(0, 498, 256, 14); g.fillRect(0, 0, 10, 512); g.fillRect(246, 0, 10, 512);
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
-}
-
-function signTexture() {
-  const c = document.createElement('canvas');
-  c.width = 1024; c.height = 168;
-  const g = c.getContext('2d');
-  g.fillStyle = '#bf9433';
-  g.fillRect(0, 0, c.width, c.height);
-  // worn band: darker speckle
-  for (let i = 0; i < 900; i++) {
-    g.fillStyle = `rgba(60,40,10,${Math.random() * 0.12})`;
-    g.fillRect(Math.random() * c.width, Math.random() * c.height, 2 + Math.random() * 4, 1 + Math.random() * 2);
-  }
-  g.fillStyle = '#0d0a08';
-  g.font = 'bold 118px "Arial Narrow", Impact, "Oswald", sans-serif';
-  g.textAlign = 'center';
-  g.textBaseline = 'middle';
-  g.fillText('THE END', c.width / 2, c.height / 2 + 6);
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 4;
-  return tex;
+// Eye height above the corridor floor along the flight: a smooth ramp (the head bob reads
+// as the steps), the landing level before it, the corridor level after.
+export function floorY(x) {
+  if (x <= 0) return LAND.y;
+  if (x >= STEP_END) return 0;
+  return LAND.y * (1 - x / STEP_END);
 }
 
 export async function build({ quality, yieldFrame }) {
   const S = quality.texSize;
   const s = Math.max(256, S / 2);
 
-  const carpet = T.carpet(S, { color: '#77777a', shade: '#4d4d50', light: '#96969a', seed: 61, tile: 1.2 });
+  const carpet = T.diamondCarpet(S, { seed: 67, tile: 1.0 });
   await yieldFrame();
-  const wall = T.backroomsWall(S, { seed: 62, tile: 3.0 });
+  const wall = T.plaidWall(S, { seed: 66, tile: 1.5 });
   await yieldFrame();
-  const tiles = T.ceilingTile(s, { seed: 63, tile: 2.0 });
+  const ceiling = T.plaster(s, { color: '#ece7dc', seed: 68, tile: 2.6, relief: 0.15 });
+  await yieldFrame();
+  const amberWall = T.plaster(s, { color: '#d8a862', seed: 69, tile: 2.0, relief: 0.2 });
   await yieldFrame();
   const moss = T.mossBlock(s, { seed: 71, tile: 2.0 });
   await yieldFrame();
 
   const M = {
     carpet: pbr(carpet, { name: 'carpet', roughness: 1, env: 0.1, normalScale: 0.7, castShadow: false }),
-    wall: pbr(wall, { name: 'wall', roughness: 0.85, env: 0.2, normalScale: 0.7 }),
-    ceiling: pbr(tiles, { name: 'ceiling', roughness: 0.95, env: 0.15, normalScale: 0.6, castShadow: false }),
-    door: pbr(null, { name: 'door', color: '#9e9e99', roughness: 0.4, env: 0.35 }),
-    frame: pbr(null, { name: 'door_frame', color: '#e6e6de', roughness: 0.5, env: 0.3 }),
-    hardware: pbr(null, { name: 'hardware', color: '#a6a8ad', roughness: 0.3, metalness: 1, env: 1.2 }),
-    trim: pbr(null, { name: 'trim', color: '#120d0a', roughness: 0.4, env: 0.3 }),
-    outlet: pbr(null, { name: 'outlet', color: '#e0dfd2', roughness: 0.4, env: 0.3 }),
-    panel: pbr(null, { name: 'fluorescent', color: '#ffffff', roughness: 0.6, env: 0, emissive: '#f5f9ff', emissiveIntensity: 4.5, castShadow: false }),
-    panelRim: pbr(null, { name: 'fluorescent_rim', color: '#d9d9d3', roughness: 0.5, env: 0.3, castShadow: false }),
-    vendBody: pbr(null, { name: 'vend_body', color: '#0d1020', roughness: 0.3, metalness: 0.2, env: 0.6 }),
-    vendTrim: pbr(null, { name: 'vend_trim', color: '#bf101a', roughness: 0.35, metalness: 0.1, env: 0.6 }),
-    vendGlow: (() => { const t = vendTexture(); const m = pbr({ map: t, tile: 1 }, { name: 'vend_glow', color: '#ffffff', roughness: 0.4, env: 0.3, emissive: '#ffffff', emissiveIntensity: 1.6, castShadow: false, worldUV: false }); m.emissiveMap = t; return m; })(),
-    vendBadge: pbr(null, { name: 'vend_badge', color: '#ffffff', roughness: 0.5, env: 0, emissive: '#ffffff', emissiveIntensity: 3.0, castShadow: false }),
-    cable: pbr(null, { name: 'cable', color: '#0a0a0a', roughness: 0.6, env: 0.2 }),
-    signText: pbr({ map: signTexture(), tile: 1 }, { name: 'sign', roughness: 0.6, env: 0.2, worldUV: false }),
+    wall: pbr(wall, { name: 'wall', roughness: 0.9, env: 0.2, normalScale: 0.5 }),
+    ceiling: pbr(ceiling, { name: 'ceiling', roughness: 1, env: 0.15, normalScale: 0.1, castShadow: false }),
+    trim: pbr(null, { name: 'trim', color: '#8c847a', roughness: 0.7, env: 0.2 }),
+    housing: pbr(null, { name: 'fixture', color: '#e8e6e0', roughness: 0.5, env: 0.3, castShadow: false }),
+    tubes: [],   // one emissive material per fixture, so each can flicker on its own
+    amber: pbr(amberWall, { name: 'amber_wall', roughness: 0.85, env: 0.3, normalScale: 0.3 }),
+    bars: pbr(null, { name: 'amber_bars', color: '#ffffff', roughness: 0.6, env: 0, emissive: '#ffd9a0', emissiveIntensity: 2.8, castShadow: false }),
     moss: pbr(moss, { name: 'moss_block', roughness: 0.95, env: 0.05, normalScale: 0.8 }),
     void: pbr(null, { name: 'void', color: '#000000', roughness: 1, env: 0, castShadow: false }),
   };
+  for (let i = 0; i < FIXTURES; i++) {
+    M.tubes.push(pbr(null, { name: 'tube_' + i, color: '#ffffff', roughness: 0.6, env: 0, emissive: '#f4f8ff', emissiveIntensity: 4.2, castShadow: false }));
+  }
 
   const B = createBuilder();
   const TH = 0.12;
   const hw = WID / 2;
 
-  // shell (walls extend a little beyond both ends)
-  B.add(box(LEN + 2 * TH, TH, WID + 2 * TH), M.carpet, place(LEN / 2, -TH / 2, 0));
-  B.add(box(LEN + 2 * TH, TH, WID + 2 * TH), M.ceiling, place(LEN / 2, HGT + TH / 2, 0));
-  B.add(box(LEN + 2 * TH, HGT, TH), M.wall, place(LEN / 2, HGT / 2, hw + TH / 2));   // Blender left (-y)
-  B.add(box(LEN + 2 * TH, HGT, TH), M.wall, place(LEN / 2, HGT / 2, -hw - TH / 2));  // Blender right (+y)
-  // end wall: two stubs beside the stairwell opening, and the header above it
-  const stubW = (WID - WELL.w) / 2 + TH;
-  B.add(box(TH, HGT, stubW), M.wall, place(LEN + TH / 2, HGT / 2, WELL.w / 2 + stubW / 2));
-  B.add(box(TH, HGT, stubW), M.wall, place(LEN + TH / 2, HGT / 2, -WELL.w / 2 - stubW / 2));
-  B.add(box(TH, HGT - WELL.h, WELL.w), M.wall, place(LEN + TH / 2, WELL.h + (HGT - WELL.h) / 2, 0));
-  B.collider(LEN + TH / 2, WELL.w / 2 + stubW / 2, TH, stubW);
-  B.collider(LEN + TH / 2, -WELL.w / 2 - stubW / 2, TH, stubW);
-  B.add(box(TH, HGT, WID + 2 * TH), M.wall, place(-TH / 2, HGT / 2, 0));             // start wall
-  // baseboards
-  B.add(box(LEN, 0.1, 0.012), M.trim, place(LEN / 2, 0.05, hw - 0.006));
-  B.add(box(LEN, 0.1, 0.012), M.trim, place(LEN / 2, 0.05, -hw + 0.006));
-  B.add(box(0.012, 0.1, stubW - TH), M.trim, place(LEN - 0.006, 0.05, WELL.w / 2 + (stubW - TH) / 2));
-  B.add(box(0.012, 0.1, stubW - TH), M.trim, place(LEN - 0.006, 0.05, -WELL.w / 2 - (stubW - TH) / 2));
+  // --- the landing and the flight up ------------------------------------------------------------
+  const landW = -LAND.x0;
+  B.add(box(landW, TH, WID + 2 * TH), M.carpet, place(LAND.x0 + landW / 2, LAND.y - TH / 2, 0));
+  B.add(box(TH, HGT + 0.4, WID + 2 * TH), M.wall, place(LAND.x0 - TH / 2, LAND.y + (HGT + 0.4) / 2, 0)); // wall behind you
+  let xs = 0;
+  for (let i = 0; i < RUNS.length; i++) {
+    const top = LAND.y + (i + 1) * RISE;
+    const h = top - LAND.y + 0.3;                  // solid down to below the landing
+    B.add(box(RUNS[i], h, WID), M.carpet, place(xs + RUNS[i] / 2, top - h / 2, 0));
+    xs += RUNS[i];
+  }
+  // the corridor floor and ceiling
+  B.add(box(LEN - STEP_END + TH, TH, WID + 2 * TH), M.carpet, place(STEP_END + (LEN - STEP_END + TH) / 2, -TH / 2, 0));
+  B.add(box(LEN - LAND.x0 + 2 * TH, TH, WID + 2 * TH), M.ceiling, place((LAND.x0 + LEN) / 2, HGT + TH / 2, 0));
+  // side walls: full height from the landing floor all the way to the end
+  const wallLen = LEN - LAND.x0 + 2 * TH;
+  const wallH = HGT - LAND.y;
+  for (const side of [1, -1]) {
+    B.add(box(wallLen, wallH, TH), M.wall, place((LAND.x0 + LEN) / 2, LAND.y + wallH / 2, side * (hw + TH / 2)));
+    // a dark baseboard along the corridor, and a sloped one up the flight
+    B.add(box(LEN - STEP_END, 0.09, 0.014), M.trim, place(STEP_END + (LEN - STEP_END) / 2, 0.045, side * (hw - 0.007)));
+    B.add(box(landW, 0.09, 0.014), M.trim, place(LAND.x0 + landW / 2, LAND.y + 0.045, side * (hw - 0.007)));
+    const slope = Math.atan2(-LAND.y, STEP_END);
+    B.add(box(Math.hypot(STEP_END, LAND.y), 0.09, 0.014), M.trim, place(STEP_END / 2, LAND.y / 2 + 0.06, side * (hw - 0.007), 0, 0, slope));
+  }
 
-  // the stairwell: a flight of block steps going down into a mossy shaft, then a landing
-  // and nothing beyond it but black
-  const runTotal = WELL.run * WELL.steps, depth = WELL.rise * WELL.steps;
-  const x0 = LEN + TH;
+  // --- the end wall: an opening into the amber vestibule ---------------------------------------------
+  const stubW = (WID - VEST.w) / 2 + TH;
+  B.add(box(TH, HGT, stubW), M.wall, place(LEN + TH / 2, HGT / 2, VEST.w / 2 + stubW / 2));
+  B.add(box(TH, HGT, stubW), M.wall, place(LEN + TH / 2, HGT / 2, -VEST.w / 2 - stubW / 2));
+  B.add(box(TH, HGT - VEST.h, VEST.w), M.wall, place(LEN + TH / 2, VEST.h + (HGT - VEST.h) / 2, 0));
+  B.collider(LEN + TH / 2, VEST.w / 2 + stubW / 2, TH, stubW);
+  B.collider(LEN + TH / 2, -VEST.w / 2 - stubW / 2, TH, stubW);
+  // the vestibule: a short amber-walled landing at corridor level, its ceiling stacked with bars
+  const VX0 = LEN + TH, VX1 = VX0 + VEST.d;
+  B.add(box(VEST.d, TH, VEST.w + 2 * TH), M.carpet, place(VX0 + VEST.d / 2, -TH / 2, 0));
+  const shaftRun = WELL.run * WELL.steps, depth = WELL.rise * WELL.steps;
+  const shaftLen = VEST.d + shaftRun + WELL.landing + TH;
+  const shaftH = depth + VEST.h + 0.6;
+  for (const side of [1, -1]) {
+    B.add(box(VEST.d + 0.1, VEST.h + 0.2, TH), M.amber, place(VX0 + VEST.d / 2, VEST.h / 2, side * (VEST.w / 2 + TH / 2)));
+    B.add(box(shaftLen - VEST.d, shaftH, TH), M.moss, place(VX1 + (shaftLen - VEST.d) / 2, VEST.h - shaftH / 2, side * (VEST.w / 2 + TH / 2)));
+    B.collider(VX0 + shaftLen / 2, side * (VEST.w / 2 + TH / 2), shaftLen, TH);
+  }
+  B.add(box(shaftLen + TH, TH, VEST.w + 2 * TH), M.amber, place(VX0 + shaftLen / 2, VEST.h + TH / 2, 0));
+  for (let i = 0; i < 6; i++) {
+    B.add(box(0.14, 0.03, VEST.w - 0.2), M.bars, place(VX0 + 0.25 + i * 0.5, VEST.h - 0.02, 0));
+  }
+  // the stairwell: block steps going down into the mossy shaft, then a landing and black
   for (let i = 0; i < WELL.steps; i++) {
-    const top = -i * WELL.rise;                // the first tread is level with the hall floor
-    const h = depth + 0.6 + top;               // solid down to below the landing
-    B.add(box(WELL.run, h, WELL.w), M.moss, place(x0 + (i + 0.5) * WELL.run, top - h / 2, 0));
+    const top = -i * WELL.rise;
+    const h = depth + 0.6 + top;
+    B.add(box(WELL.run, h, VEST.w), M.moss, place(VX1 + (i + 0.5) * WELL.run, top - h / 2, 0));
   }
-  const landX = x0 + runTotal;
-  B.add(box(WELL.landing, 0.6, WELL.w), M.moss, place(landX + WELL.landing / 2, -depth - 0.3, 0));
-  const shaftLen = runTotal + WELL.landing + TH;
-  const shaftH = depth + HGT + 0.6;
-  B.add(box(shaftLen, shaftH, TH), M.moss, place(x0 + shaftLen / 2, HGT - shaftH / 2, WELL.w / 2 + TH / 2));
-  B.add(box(shaftLen, shaftH, TH), M.moss, place(x0 + shaftLen / 2, HGT - shaftH / 2, -WELL.w / 2 - TH / 2));
-  const slope = Math.atan2(depth, runTotal);
-  const ceilLen = Math.hypot(depth, runTotal) + 0.6;
-  B.add(box(ceilLen, TH, WELL.w + 2 * TH), M.moss, place(x0 + 0.1 + (ceilLen / 2) * Math.cos(slope), WELL.h + 0.15 - (ceilLen / 2) * Math.sin(slope), 0, 0, 0, -slope));
-  B.add(box(WELL.landing + TH, TH, WELL.w + 2 * TH), M.moss, place(landX + WELL.landing / 2, WELL.h + 0.1 - depth, 0));
-  B.add(box(TH, shaftH, WELL.w + 2 * TH), M.void, place(landX + WELL.landing + TH / 2, HGT - shaftH / 2, 0));
+  const landX = VX1 + shaftRun;
+  B.add(box(WELL.landing, 0.6, VEST.w), M.moss, place(landX + WELL.landing / 2, -depth - 0.3, 0));
+  B.add(box(TH, shaftH, VEST.w + 2 * TH), M.void, place(landX + WELL.landing + TH / 2, VEST.h - shaftH / 2, 0));
+  B.add(box(2, 0.4, VEST.w + 2 * TH), M.void, place(landX + WELL.landing + 1, -depth - 1.2, 0));
 
-  // doors: Blender y = -1.65 (left, three z = +1.65) and +1.65 (right, three z = -1.65)
-  for (let i = 0; i < 9; i++) {
-    const x = 2 + i * 4;
-    for (const side of [1, -1]) {
-      if (side === 1 && i === 1) continue; // the vending machine stands here
-      const z = side * 1.65;
-      const zf = side * 1.68;
-      B.add(box(1.14, 2.25, 0.05), M.frame, place(x, 1.1, zf));
-      B.add(box(1.0, 2.15, 0.05), M.door, place(x, 1.08, z));
-      B.add(box(0.03, 0.13, 0.05), M.hardware, place(x + 0.32, 0.9, side * 1.62));
-      B.add(box(0.09, 0.14, 0.01), M.outlet, place(x + 1.4, 0.32, side * 1.69));
-    }
-    // fluorescent panel with a thin rim, on the ceiling
-    B.add(box(2.4, 0.03, 0.55), M.panel, place(x, HGT - 0.02, 0));
-    B.add(box(2.5, 0.02, 0.65), M.panelRim, place(x, HGT - 0.005, 0));
+  // --- the fixtures: surface-mounted twin tubes, one material each ----------------------------------
+  const fixtures = [];
+  for (let i = 0; i < FIXTURES; i++) {
+    const x = FIX_X0 + i * FIX_DX;
+    B.add(box(1.25, 0.07, 0.32), M.housing, place(x, HGT - 0.035, 0));
+    for (const dz of [-0.075, 0.075]) B.add(cyl(0.02, 0.02, 1.18, 8), M.tubes[i], place(x, HGT - 0.09, dz, 0, 0, Math.PI / 2));
+    B.add(box(1.22, 0.012, 0.22), M.tubes[i], place(x, HGT - 0.105, 0));
+    fixtures.push(new THREE.Vector3(x, HGT - 0.5, 0));
   }
-
-  // vending machine (Blender y = -1.39 -> z = +1.39; its face looks into the corridor at z = 1.08)
-  B.add(box(0.85, 1.85, 0.62), M.vendBody, place(6.0, 0.93, 1.39));
-  B.add(box(0.85, 0.05, 0.62), M.vendTrim, place(6.0, 1.85, 1.39));
-  B.mesh(new THREE.PlaneGeometry(0.62, 1.15), M.vendGlow, place(6.0, 1.15, 1.08));
-  B.add(box(0.34, 0.34, 0.01), M.vendBadge, place(6.0, 1.45, 1.075));
-  B.add(box(0.14, 0.18, 0.03), M.vendBody, place(6.28, 0.75, 1.1));
-  B.add(box(0.05, 0.03, 0.02), M.trim, place(6.28, 0.55, 1.09));
-  for (let i = 0; i < 5; i++) B.add(box(0.14, 0.01, 0.02), M.cable, place(5.65 + i * 0.13, 0.005, 1.08 + i * 0.05, -0.35));
-  B.collider(6.0, 1.39, 0.9, 0.66);
-
-  // end sign band (Blender x = 35.98 -> a plane just proud of the end wall)
-  B.add(box(0.02, 0.5, 3.06), M.trim, place(LEN - 0.02, 2.15, 0));
-  B.mesh(new THREE.PlaneGeometry(3.06, 0.5), M.signText, place(LEN - 0.032, 2.15, 0, -Math.PI / 2));
 
   const { group, colliders } = B.finish();
 
-  // lights: warm dim ambient from the .blend world, and a pool of three point lights that
-  // re-park on the nearest fluorescent panels as the player walks (constant light count,
-  // so the shaders never recompile mid-walk).
+  // --- lights: a pool of three that re-park on the nearest fixtures, a warm end, a green well ---
   const lights = new THREE.Group();
-  lights.add(new THREE.HemisphereLight(0xfff4d8, 0x5a4c20, 0.8));
-  const fixtures = [];
-  for (let i = 0; i < 9; i++) fixtures.push(new THREE.Vector3(2 + i * 4, HGT - 0.5, 0));
+  lights.add(new THREE.HemisphereLight(0xfff1d8, 0x5e5446, 0.62));
+  const POOL_I = 13;
   const pool = [];
   for (let i = 0; i < 3; i++) {
-    const l = new THREE.PointLight(0xeef3ff, 16, 13, 2);
+    const l = new THREE.PointLight(0xeef3ff, POOL_I, 12, 2);
     l.position.copy(fixtures[i]);
+    l.userData.fixture = i;
     lights.add(l);
     pool.push(l);
   }
-  function update(playerPos) {
-    const sorted = fixtures.slice().sort((a, b) => Math.abs(a.x - playerPos.x) - Math.abs(b.x - playerPos.x));
-    for (let i = 0; i < pool.length; i++) pool[i].position.copy(sorted[i]);
-  }
-
-  // a green glimmer at the top of the flight; the fog keeps the bottom black
-  const glow = new THREE.PointLight(0x7fd06a, 3.5, 6, 2);
-  glow.position.set(x0 + 0.6, 1.4, 0);
+  const landingLight = new THREE.PointLight(0xfff0dc, 5, 7, 2);
+  landingLight.position.set(-1.2, HGT - 0.4, 0);
+  lights.add(landingLight);
+  const amber = new THREE.PointLight(0xffc27a, 9, 7, 2);
+  amber.position.set(VX0 + 0.7, VEST.h - 0.4, 0);
+  lights.add(amber);
+  const glow = new THREE.PointLight(0x7fd06a, 3.0, 6, 2);
+  glow.position.set(VX1 + 0.8, 1.2, 0);
   lights.add(glow);
 
-  // the exit: step into the opening, and the camera walks the first treads down
-  const trigger = { minX: LEN - 0.35, maxX: LEN + 0.6, minZ: -WELL.w / 2, maxZ: WELL.w / 2 };
-  const nearGoal = { minX: LEN - 5, maxX: LEN + 0.6, minZ: -hw, maxZ: hw };
+  // --- the tubes flicker one at a time, the buzz rises down the hall ---------------------------------
+  const levels = new Array(FIXTURES).fill(1);
+  let elapsed = 0;
+  function update(p, dt, camera, ctx) {
+    if (dt === undefined) return;
+    elapsed += dt;
+    // the eye follows the floor: down on the landing, up the flight, level in the corridor
+    ctx.controls.setEyeOffset(floorY(p.x));
+    // one of the nine fixtures stutters every second or so; which one, and when, is hashed
+    for (let i = 0; i < FIXTURES; i++) {
+      let level = 1;
+      if (ctx.reduced) level = 0.96 + 0.04 * Math.sin(elapsed * 0.7 + i);
+      else if (stutter(i, elapsed, 8) < 0.012) level = stutter(i + 100, elapsed, 40) > 0.5 ? 0.15 : 0.45;
+      levels[i] = level;
+      M.tubes[i].emissiveIntensity = 4.2 * level;
+      M.tubes[i].color.setScalar(0.5 + 0.5 * level);
+    }
+    const sorted = fixtures.map((f, i) => i).sort((a, b) => Math.abs(fixtures[a].x - p.x) - Math.abs(fixtures[b].x - p.x));
+    for (let i = 0; i < pool.length; i++) {
+      pool[i].position.copy(fixtures[sorted[i]]);
+      pool[i].intensity = POOL_I * (0.25 + 0.75 * levels[sorted[i]]);
+    }
+    // the amber bars breathe
+    M.bars.emissiveIntensity = 2.8 + 0.5 * Math.sin(elapsed * 1.3);
+    amber.intensity = 9 + 1.5 * Math.sin(elapsed * 1.3);
+    // the buzz of the lights gets louder the further you walk
+    const along = Math.max(0, Math.min(1, (p.x - STEP_END) / (LEN - STEP_END)));
+    ctx.sound.buzz(0.12 + 0.7 * along);
+  }
+
+  // the exit: step onto the top of the well, and the camera walks the first treads down
+  const trigger = { minX: VX1 - 0.35, maxX: VX1 + 0.6, minZ: -WELL.w / 2, maxZ: WELL.w / 2 };
+  const nearGoal = { minX: LEN - 5, maxX: VX1 + 0.6, minZ: -hw, maxZ: hw };
   const exitPath = [
-    new THREE.Vector3(x0 + 0.5, 1.62 - 0.2, 0),
-    new THREE.Vector3(x0 + 1.6, 1.62 - 1.0, 0),
-    new THREE.Vector3(x0 + 2.8, 1.62 - 1.9, 0),
+    new THREE.Vector3(VX1 + 0.5, 1.62 - 0.2, 0),
+    new THREE.Vector3(VX1 + 1.6, 1.62 - 1.0, 0),
+    new THREE.Vector3(VX1 + 2.8, 1.62 - 1.9, 0),
   ];
 
   return {
     meta,
     group, lights, colliders, update,
-    bounds: { minX: 0, maxX: LEN + 0.6, minZ: -hw, maxZ: hw },
-    trigger, nearGoal, exitPath, exitLookAt: new THREE.Vector3(x0 + 4.5, -2.2, 0),
+    bounds: { minX: LAND.x0 + 0.1, maxX: VX1 + 0.6, minZ: -hw, maxZ: hw },
+    trigger, nearGoal, exitPath, exitLookAt: new THREE.Vector3(VX1 + 4.5, -2.2, 0),
     exitFadeStart: 0.55,
-    fog: new THREE.FogExp2(0x1a1408, 0.035),
-    background: 0x1a1408,
+    fog: new THREE.FogExp2(0x1a1612, 0.03),
+    background: 0x1a1612,
     exposure: 1.0,
+    debug: { tubes: M.tubes, levels, fixtures, LEN, STEP_END, floorY },
   };
 }

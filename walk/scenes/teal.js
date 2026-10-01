@@ -7,7 +7,7 @@
 // sleeper on it.
 import * as THREE from 'three';
 import * as T from '../textures.js';
-import { pbr, place, box, cyl, sphere, createBuilder } from '../build.js';
+import { pbr, place, box, cyl, sphere, createBuilder, cycle } from '../build.js';
 import { tealMaterials, plantSmall, voidDoor } from './teal_common.js';
 
 export const meta = {
@@ -18,6 +18,36 @@ export const meta = {
 };
 
 const ROOM = { w: 5.2, d: 7.4, h: 2.5 }; // x: ±2.6, z: ±3.7
+// The room video is still until its last second, when the black of the doorway lifts to a
+// dark charcoal and settles again. Stretched to the walk: every DOOR_PERIOD seconds.
+const DOOR_PERIOD = 24, DOOR_AT = 0.85, DOOR_LIFT = 0.6, DOOR_HOLD = 1.6;
+
+// The clip's sofa is an angular shell: an elongated octagon in side view (the base and the
+// arms are one chamfered piece), with three seat cushions and a low back. Built as an
+// extruded profile along x, then the cushions as boxes.
+function angularSofa(B, M, x, z, { w = 2.3, d = 0.9, h = 0.78 } = {}) {
+  const shape = new THREE.Shape();
+  const hw = w / 2, c = 0.22;             // chamfer
+  shape.moveTo(-hw + c, 0.1);
+  shape.lineTo(hw - c, 0.1);
+  shape.lineTo(hw, 0.1 + c);
+  shape.lineTo(hw, h - c);
+  shape.lineTo(hw - c, h);
+  shape.lineTo(hw - 0.3, h);
+  shape.lineTo(hw - 0.3, 0.48);           // the seat well between the arms
+  shape.lineTo(-hw + 0.3, 0.48);
+  shape.lineTo(-hw + 0.3, h);
+  shape.lineTo(-hw + c, h);
+  shape.lineTo(-hw, h - c);
+  shape.lineTo(-hw, 0.1 + c);
+  shape.closePath();
+  const shell = new THREE.ExtrudeGeometry(shape, { depth: d, bevelEnabled: false });
+  B.add(shell, M.leather, place(x, 0, z + d / 2));
+  // the back: the same chamfered thickness along the rear of the well
+  B.add(box(w - 0.6, 0.5, 0.2), M.leather, place(x, 0.73, z - d / 2 + 0.12));
+  for (const dx of [-0.66, 0, 0.66]) B.add(box(0.62, 0.12, d - 0.34), M.leather, place(x + dx, 0.47, z + 0.08));
+  for (const [dx, dz] of [[-0.9, -0.3], [0.9, -0.3], [-0.9, 0.3], [0.9, 0.3]]) B.add(box(0.07, 0.1, 0.07), M.foot, place(x + dx, 0.05, z + dz));
+}
 
 export async function build({ quality, yieldFrame }) {
   const M = await tealMaterials({ quality, yieldFrame, variant: 'c' });
@@ -62,12 +92,7 @@ export async function build({ quality, yieldFrame }) {
 
   // --- the orange angular sofa ------------------------------------------------------
   const SX = -0.9, SZ = -hz + 0.5;
-  B.add(box(2.2, 0.3, 0.9), M.leather, place(SX, 0.33, SZ));                       // base
-  for (const dx of [-0.72, 0, 0.72]) B.add(box(0.7, 0.13, 0.8), M.leather, place(SX + dx, 0.545, SZ + 0.02));
-  B.add(box(2.2, 0.5, 0.2), M.leather, place(SX, 0.75, SZ - 0.36));                // back
-  B.add(box(0.26, 0.6, 0.9), M.leather, place(SX - 1.16, 0.6, SZ, 0, 0, 0.16));    // arms, splayed outward
-  B.add(box(0.26, 0.6, 0.9), M.leather, place(SX + 1.16, 0.6, SZ, 0, 0, -0.16));
-  for (const [dx, dz] of [[-0.95, -0.35], [0.95, -0.35], [-0.95, 0.35], [0.95, 0.35]]) B.add(box(0.08, 0.18, 0.08), M.foot, place(SX + dx, 0.09, SZ + dz));
+  angularSofa(B, M, SX, SZ);
   B.collider(SX, SZ, 2.6, 1.0);
 
   // the plant in the corner, right of the doorway
@@ -95,8 +120,9 @@ export async function build({ quality, yieldFrame }) {
   sun.target.position.set(0.8, 0, WZ + 0.6);
   lights.add(sun);
   lights.add(sun.target);
-  const fill = new THREE.PointLight(0xa8fff0, 0.8, 6, 2);
-  fill.position.set(DX, 1.2, -hz + 1.2);
+  // the doorway: nothing comes out of it, except when the dark lifts
+  const fill = new THREE.PointLight(0x9fb8c0, 0, 5, 2);
+  fill.position.set(DX, 1.2, -hz + 0.5);
   lights.add(fill);
 
   // --- the goal: the couch --------------------------------------------------------------
@@ -110,8 +136,11 @@ export async function build({ quality, yieldFrame }) {
 
   // the watch on the HUD: it runs backward, and its seconds make no sense
   let watchT = 0, mm = 27, ss = 81;
+  let elapsed = 0, still = 0, doorLift = 0;
+  const lifted = new THREE.Color('#141b1b');
   function update(p, dt, camera, ctx) {
     if (dt === undefined) return;
+    elapsed += dt;
     watchT += dt;
     if (watchT >= 1) {
       watchT -= 1;
@@ -119,6 +148,18 @@ export async function build({ quality, yieldFrame }) {
       if (ss < 0) { ss = 99; mm -= 1; if (mm < 0) mm = 27; }
       ctx.setReadout(`WATCH  ${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`);
     }
+    // the dark in the doorway lifts for a moment, as at the end of the clip, then swallows again
+    const ph = (cycle(elapsed, DOOR_PERIOD) - DOOR_AT) * DOOR_PERIOD; // seconds since the lift began
+    let k = 0;
+    if (ph >= 0 && ph < DOOR_LIFT) k = ph / DOOR_LIFT;
+    else if (ph >= DOOR_LIFT && ph < DOOR_LIFT + DOOR_HOLD) k = 1;
+    else if (ph >= DOOR_LIFT + DOOR_HOLD && ph < DOOR_LIFT * 2 + DOOR_HOLD) k = 1 - (ph - DOOR_LIFT - DOOR_HOLD) / DOOR_LIFT;
+    doorLift = k * k * (3 - 2 * k);
+    M.voidFace.color.copy(lifted).multiplyScalar(doorLift);
+    fill.intensity = doorLift * 0.9;
+    // the clip's camera drifts, slowly: when you stand still, so does your eye (not under reduced motion)
+    still = ctx.controls.isMoving() ? 0 : still + dt;
+    if (!ctx.reduced) ctx.controls.setEyeOffset(still > 3 ? Math.sin((still - 3) * 0.45) * 0.012 * Math.min(1, (still - 3) / 2) : 0);
   }
 
   return {
@@ -129,5 +170,6 @@ export async function build({ quality, yieldFrame }) {
     fog: new THREE.FogExp2(0x041a1a, 0.02),
     background: 0x000000,
     exposure: 1.05,
+    debug: { voidFace: M.voidFace, get doorLift() { return doorLift; }, DOOR_PERIOD, DOOR_AT },
   };
 }
