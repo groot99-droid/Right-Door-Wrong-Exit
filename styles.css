@@ -405,6 +405,64 @@ body.phase-load .screen-load video {
 
 .walk-readout.visible { opacity: 1; }
 
+/* the room's mini game: its score line, under the readout */
+.walk-tally {
+  position: absolute;
+  z-index: 5;
+  top: calc(7vh + clamp(1.6rem, 4.4vw, 2.8rem) + 1.6em);
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-family: "Share Tech Mono", "Courier New", monospace;
+  font-size: clamp(0.62rem, 1.6vw, 0.8rem);
+  letter-spacing: 0.3em;
+  text-indent: 0.3em;
+  color: rgba(255, 241, 196, 0.85);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.95);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+.walk-tally.visible { opacity: 1; }
+
+/* what "use" would do to the thing in front of you; on a phone it is the button to tap */
+.walk-use {
+  position: absolute;
+  z-index: 6;
+  top: 60%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  max-width: 80vw;
+  min-height: 44px;
+  padding: 0.55rem 1.1rem;
+  border: 1px solid rgba(255, 183, 3, 0.55);
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.42);
+  color: #ffb703;
+  font-family: "Share Tech Mono", "Courier New", monospace;
+  font-size: clamp(0.62rem, 1.6vw, 0.82rem);
+  letter-spacing: 0.24em;
+  text-indent: 0.24em;
+  white-space: pre;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.95);
+  cursor: pointer;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0s linear 0.2s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.walk-use.visible {
+  pointer-events: auto;
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.2s ease;
+}
+
+.walk-use:focus { outline: none; }
+
 .walk-objective.near {
   color: #fff1c4;
   animation: objectivePulse 1.2s ease-in-out infinite;
@@ -804,6 +862,8 @@ body.notes-open .notes-tab-handle { right: min(33vw, 420px); }
   .next-btn { bottom: 6vh; padding: 0.8rem 1.5rem; }
   .walk-objective { top: 11vh; font-size: clamp(1rem, 5vw, 1.4rem); }
   .walk-readout { top: calc(11vh + 1.9rem); font-size: 0.58rem; }
+  .walk-tally { top: calc(11vh + 1.9rem + 1.5em); font-size: 0.58rem; letter-spacing: 0.2em; }
+  .walk-use { top: 65%; font-size: 0.66rem; letter-spacing: 0.16em; max-width: 70vw; white-space: normal; }
   .walk-hint { bottom: 5vh; font-size: 0.6rem; letter-spacing: 0.18em; }
   .notes-tab-handle,
   .skip-tab-handle {

@@ -145,6 +145,8 @@
     hint: document.getElementById('walkHint'),
     joystick: document.getElementById('walkJoystick'),
     readout: document.getElementById('walkReadout'),
+    tally: document.getElementById('walkTally'),
+    use: document.getElementById('walkUse'),
     fade: document.getElementById('walkFade'),
   };
 
