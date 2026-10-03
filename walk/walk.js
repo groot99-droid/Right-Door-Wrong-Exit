@@ -170,14 +170,25 @@ export async function start(id, elements, opts = {}) {
   objective.textContent = built.meta.objective;
   objective.classList.remove('near');
   if (readout) { readout.textContent = ''; readout.classList.remove('visible'); }
-  if (tally) { tally.textContent = ''; tally.classList.remove('visible'); }
+  if (tally) { tally.textContent = ''; tally.classList.remove('visible', 'flash'); }
   // what a scene may do to the HUD and the walk from its update()
   const ctx = {
     setObjective(text) { built.meta.objective = text; if (!objective.classList.contains('near')) objective.textContent = text; },
     setArrive(text) { built.meta.arrive = text; if (objective.classList.contains('near')) objective.textContent = text; },
     setReadout(text) { if (!readout) return; readout.textContent = text || ''; readout.classList.toggle('visible', !!text); },
-    // the mini game's score line, under the readout
-    setTally(text) { if (!tally) return; tally.textContent = text || ''; tally.classList.toggle('visible', !!text); },
+    // the mini game's score line, under the readout. Nothing new is posted once the exit has
+    // begun; the same text again flashes the line, so a repeated miss still registers.
+    setTally(text) {
+      if (!tally || ctx.exiting) return;
+      if (text && text === tally.textContent) {
+        tally.classList.remove('flash');
+        void tally.offsetWidth;
+        tally.classList.add('flash');
+      }
+      tally.textContent = text || '';
+      tally.classList.toggle('visible', !!text);
+    },
+    exiting: false,
     sound, reduced, quality: q, controls,
   };
 
@@ -189,7 +200,10 @@ export async function start(id, elements, opts = {}) {
   let pendingUse = false;
   const requestUse = () => { if (play) pendingUse = true; };
   controls.onUse(requestUse);
-  const onUseButton = (e) => {
+  // A tap made while the other thumb holds the joystick gets no click from the browser, so a
+  // touch is taken on pointerup; the click that may follow a single-finger tap is then ignored.
+  let lastTouchUse = -Infinity;
+  const pressUse = (e) => {
     e.preventDefault();
     e.stopPropagation();
     requestUse();
@@ -197,8 +211,18 @@ export async function start(id, elements, opts = {}) {
     useButton.blur();
     try { r.domElement.focus({ preventScroll: true }); } catch (_) { /* ignore */ }
   };
+  const onUsePointerUp = (e) => {
+    if (e.pointerType !== 'touch' && e.pointerType !== 'pen') return;
+    lastTouchUse = performance.now();
+    pressUse(e);
+  };
+  const onUseButton = (e) => {
+    if (performance.now() - lastTouchUse < 600) { e.preventDefault(); return; }
+    pressUse(e);
+  };
   if (useButton) {
     useButton.classList.remove('visible');
+    useButton.addEventListener('pointerup', onUsePointerUp);
     useButton.addEventListener('click', onUseButton);
   }
   hint.textContent = q.touch
@@ -270,6 +294,7 @@ export async function start(id, elements, opts = {}) {
     objective.textContent = built.meta.arrive;
     if (play) play.hide();
     pendingUse = false;
+    ctx.exiting = true;
     const from = camera.position.clone();
     const path = typeof built.exitPath === 'function' ? built.exitPath(from) : built.exitPath;
     const pts = [from, ...path];
@@ -388,7 +413,11 @@ export async function start(id, elements, opts = {}) {
     hint.classList.remove('visible');
     if (readout) readout.classList.remove('visible');
     if (tally) tally.classList.remove('visible');
-    if (useButton) { useButton.classList.remove('visible'); useButton.removeEventListener('click', onUseButton); }
+    if (useButton) {
+      useButton.classList.remove('visible');
+      useButton.removeEventListener('pointerup', onUsePointerUp);
+      useButton.removeEventListener('click', onUseButton);
+    }
     scene.remove(camera);
     // Free the room. A revisit rebuilds it (the loop returns to the title card first).
     prepared.delete(id);

@@ -399,7 +399,8 @@ export function photo(size, { seed = 7, warm = true } = {}) {
       if (Math.abs(v - 0.58) < 0.012) l *= 0.9;
       const vignette = 1 - Math.pow(Math.hypot(u - 0.5, v - 0.5) * 1.35, 2.2) * 0.6;
       l = clamp01(l * vignette + (grain - 0.5) * 0.08);
-      writeRgb(rgba, (y * size + x) * 4, l * tint[0], l * tint[1], l * tint[2]);
+      // rows are painted top-down; a DataTexture's first row is the bottom of the image
+      writeRgb(rgba, ((size - 1 - y) * size + x) * 4, l * tint[0], l * tint[1], l * tint[2]);
     }
   }
   const tex = dataTexture(rgba, size, { srgb: true });

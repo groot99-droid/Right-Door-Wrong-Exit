@@ -1,13 +1,16 @@
 // The things in a room you can use: a red tin to take off a heap, an empty frame to hang a
 // photograph in, a picture on the wall to point at. A scene lists them as `interact`
 // targets; every frame the one closest to the middle of the view, within reach, gets the
-// prompt, and "use" (E / Space / Enter / a click, or a tap on the prompt on a phone) calls
-// it. The mini games are a bonus: nothing here touches a room's exit.
+// prompt, and "use" (E / Space / Enter, a click while the mouse is captured, a click on the
+// prompt, or a tap on it on a phone) calls it. The mini games are a bonus: nothing here
+// touches a room's exit.
 //
-// A target: { x, y, z, reach = 1.8, size = 0.2, label, enabled() -> bool, use(ctx) }
+// A target: { x, y, z, reach = 1.8, size = 0.2, label, enabled() -> bool, use(ctx), hover?(on) }
 //   reach  how close (on the floor) the player must stand
 //   size   its radius in metres, for aiming: anything within that of the view ray counts
 //   label  the prompt text (a string, or a function returning one)
+//   hover  optional: called with true when the prompt points at it and false when it stops,
+//          so a room can light up which of several look-alike things "use" would pick
 import * as THREE from 'three';
 
 const AIM_SLACK = 0.05;   // radians of forgiveness on top of the target's own size
@@ -18,6 +21,7 @@ const view = new THREE.Vector3();
 export function createPlay(targets, { camera, button, touch = false }) {
   let current = null;
   let shown = null;
+  if (button) button.classList.toggle('touch', !!touch);
 
   function labelOf(t) { return typeof t.label === 'function' ? t.label() : t.label; }
 
@@ -49,6 +53,10 @@ export function createPlay(targets, { camera, button, touch = false }) {
       if (angle > Math.atan((t.size || 0.2) / dist) + AIM_SLACK) continue;
       if (angle < bestAngle) { bestAngle = angle; best = t; }
     }
+    if (best !== current) {
+      if (current && current.hover) current.hover(false);
+      if (best && best.hover) best.hover(true);
+    }
     current = best;
     show(best ? labelOf(best) : '');
   }
@@ -60,7 +68,11 @@ export function createPlay(targets, { camera, button, touch = false }) {
     return true;
   }
 
-  function hide() { current = null; show(''); }
+  function hide() {
+    if (current && current.hover) current.hover(false);
+    current = null;
+    show('');
+  }
 
   return {
     update, use, hide,

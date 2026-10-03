@@ -71,6 +71,8 @@ export function createControls(camera, domElement, { reducedMotion = false } = {
       case 'KeyA': case 'ArrowLeft': keys.left = true; break;
       case 'KeyD': case 'ArrowRight': keys.right = true; break;
       case 'KeyE': case 'Space': case 'Enter': case 'NumpadEnter':
+        // Space and Enter still press a focused button (SKIP, SOUND); E is never a button key
+        if (e.code !== 'KeyE' && e.target !== domElement && e.target.closest && e.target.closest('button, a, [role="button"]')) return;
         if (!e.repeat && onUseFn) onUseFn();
         break;
       default: return;
