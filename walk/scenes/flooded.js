@@ -7,9 +7,15 @@
 // the ceiling lands as perfect square blue blocks that melt into puddles, a grate that
 // feels soft, the corridor groaning. The red door is the lure; the grate in front of it
 // gives way, and the next loading clip is the fall down the shaft.
+//
+// Against the painted sky, heaps of sodden cardboard boxes and wet paper, slumped where the
+// water left them. On the first, three photographs, still dripping. The frames down the
+// right are empty. The bonus game (it never touches the exit): take the photographs off the
+// heap and hang them, and for a while the painted sky moves.
 import * as THREE from 'three';
 import * as T from '../textures.js';
 import { pbr, place, box, cyl, createBuilder, mirrorY, cycle, stutter } from '../build.js';
+import { heap, saggingBox } from '../piles.js';
 
 export const meta = {
   id: 'flooded',
@@ -37,6 +43,7 @@ export async function build({ quality, yieldFrame }) {
   const mural = T.skyMural(quality.phone ? 1024 : 2048, quality.phone ? 256 : 512);
   const steelPanel = T.tiles(s, { cols: 2, rows: 4, a: '#3a3e45', b: '#33373d', grout: '#1c1e22', groutW: 0.02, seed: 144, tile: 2.0, gloss: 0.4, rivets: true });
   await yieldFrame();
+  const prints = [0, 1, 2].map((i) => T.photo(Math.max(128, S / 4), { seed: 300 + i * 11, warm: i !== 1 }));
   const tact = T.tactile(256);
   const rippleN = T.ripple(256);
   rippleN.repeat.set(LEN / 2.5, WID / 2.5);
@@ -67,6 +74,10 @@ export async function build({ quality, yieldFrame }) {
     void: pbr(null, { name: 'void', color: '#000000', roughness: 1, env: 0, castShadow: false }),
     drip: pbr(null, { name: 'drip', color: '#2e6cff', roughness: 0.15, env: 1.2, emissive: '#1a44c0', emissiveIntensity: 0.7, transparent: true, opacity: 0.9, castShadow: false }),
     puddle: pbr(null, { name: 'puddle', color: '#5a86d8', roughness: 0.1, env: 1.6, transparent: true, opacity: 0.5, castShadow: false }),
+    // wet cardboard and paper: dark, and glossy where the water sits on them
+    cardboard: pbr(null, { name: 'wet_cardboard', color: '#6f583d', roughness: 0.42, env: 0.8 }),
+    cardboardLight: pbr(null, { name: 'wet_cardboard_light', color: '#8d7350', roughness: 0.5, env: 0.7 }),
+    paper: pbr(null, { name: 'wet_paper', color: '#dcd6c6', roughness: 0.35, env: 0.9, side: THREE.DoubleSide }),
   };
 
   const hw = WID / 2, TH = 0.12;
@@ -119,6 +130,20 @@ export async function build({ quality, yieldFrame }) {
     panels.push(new THREE.Vector3(x, HGT - 0.45, 0));
   }
 
+  // --- the heaps: sodden boxes and paper under the painted sky ------------------------------
+  const boxA = saggingBox(0.46, 0.34, 0.38, 0.045);
+  const boxB = saggingBox(0.36, 0.26, 0.3, 0.03);
+  const sheet = new THREE.PlaneGeometry(0.22, 0.3).rotateX(-Math.PI / 2);
+  const HEAP_PARTS = [
+    { item: [[boxA, M.cardboard, null]], h: 0.34, weight: 2 },
+    { item: [[boxB, M.cardboardLight, null]], h: 0.26, weight: 2 },
+    { item: [[sheet, M.paper, place(0, 0.004, 0)]], h: 0.01, weight: 3 },
+  ];
+  // the one with the photographs, a few steps in; set dressing further down
+  const HEAP_X = 6.4, HEAP_Z = -hw + 0.52;
+  const photoHeap = heap(R, HEAP_PARTS, { x: HEAP_X, z: HEAP_Z, rx: 0.78, rz: 0.46, height: 0.66, count: 32, seed: 611 });
+  const paperHeap = heap(R, HEAP_PARTS, { x: 19.2, z: -hw + 0.48, ry: 0.2, rx: 0.66, rz: 0.42, height: 0.52, count: 26, seed: 612 });
+
   // --- floor, water, strip ------------------------------------------------------------------
   const floorPlane = new THREE.PlaneGeometry(LEN + 2 * TH, WID + 2 * TH);
   const floorMesh = F.mesh(floorPlane, M.floor, place(LEN / 2, 0, 0, 0, -Math.PI / 2));
@@ -168,6 +193,19 @@ export async function build({ quality, yieldFrame }) {
   F.object(cubes);
   F.object(puddles);
 
+  // --- the photographs: fanned on top of the heap, face up --------------------------------------
+  const PW = 0.5, PH = 0.66;                       // just inside a frame's 0.6 x 0.8 board
+  const FRAME_Y = 2.0, FRAME_Z = hw - 0.05;
+  const frameXs = Array.from({ length: 13 }, (_, i) => 3 + i * 2.4);
+  const PARKED = new THREE.Vector3(0, -20, 0);
+  const photos = prints.map((tex, i) => {
+    const mat = pbr(tex, { name: 'print_' + i, roughness: 0.28, env: 0.9, worldUV: false, castShadow: false, side: THREE.DoubleSide });
+    const lx = (i - 1) * 0.22, a = (i - 1) * 0.45;
+    const m = F.mesh(new THREE.PlaneGeometry(PW, PH), mat,
+      place(HEAP_X + lx, photoHeap.height + 0.02 + i * 0.006, HEAP_Z + 0.04 - Math.abs(i - 1) * 0.06, a, -Math.PI / 2 + 0.12, 0));
+    return { mesh: m, state: 'heap', frame: -1 };
+  });
+
   const roomOut = R.finish();
   const floorOut = F.finish();
   const group = new THREE.Group();
@@ -196,6 +234,49 @@ export async function build({ quality, yieldFrame }) {
     return 0.9 + 0.1 * Math.sin(ph * 2.4);
   }
 
+  // --- the bonus: hang the photographs ------------------------------------------------------------
+  const game = { photos, frames: frameXs.map((x) => ({ x, photo: -1 })), heaps: [photoHeap.collider, paperHeap.collider], hung: 0, carrying: -1, done: false };
+  const tally = () => (game.done ? `PHOTOGRAPHS HUNG ${game.hung}/3  ·  THE SKY MOVES`
+    : game.carrying >= 0 ? `CARRYING A PHOTOGRAPH  ·  HANG IT  ${game.hung}/3`
+      : `PHOTOGRAPHS HUNG ${game.hung}/3`);
+  let groanQuiet = 0;
+  const interact = [{
+    x: HEAP_X, y: photoHeap.height, z: HEAP_Z, reach: 2.0, size: 0.45, label: 'TAKE A PHOTOGRAPH',
+    enabled: () => game.carrying < 0 && photos.some((p) => p.state === 'heap'),
+    use(ctx) {
+      // the top one first
+      let i = -1;
+      for (let k = photos.length - 1; k >= 0; k--) if (photos[k].state === 'heap') { i = k; break; }
+      photos[i].state = 'carried';
+      photos[i].mesh.position.copy(PARKED);
+      game.carrying = i;
+      ctx.sound.pickup();
+      ctx.setTally(tally());
+    },
+  }];
+  game.frames.forEach((f, fi) => interact.push({
+    x: f.x, y: FRAME_Y, z: FRAME_Z, reach: 1.9, size: 0.4, label: 'HANG IT',
+    enabled: () => game.carrying >= 0 && f.photo < 0,
+    use(ctx) {
+      const p = photos[game.carrying];
+      p.mesh.position.set(f.x, FRAME_Y, FRAME_Z);
+      p.mesh.rotation.set(0, Math.PI, 0);
+      p.state = 'hung';
+      p.frame = fi;
+      f.photo = game.carrying;
+      game.carrying = -1;
+      game.hung++;
+      ctx.sound.pickup();
+      if (game.hung === photos.length) {
+        // the illusion holds again, for a while: the corridor stops groaning and the clouds drift
+        game.done = true;
+        groanQuiet = 20;
+        ctx.sound.win();
+      }
+      ctx.setTally(tally());
+    },
+  }));
+
   // --- the goal ---------------------------------------------------------------------------------
   const trigger = { minX: GRATE_X - 0.18, maxX: GRATE_X + 0.3, minZ: -hw, maxZ: hw };
   const nearGoal = { minX: GRATE_X - 6, maxX: LEN, minZ: -hw, maxZ: hw };
@@ -205,7 +286,8 @@ export async function build({ quality, yieldFrame }) {
   function update(p, dt, camera, ctx) {
     if (dt === undefined) return;
     elapsed += dt;
-    if (!readoutSet) { readoutSet = true; ctx.setReadout('ERR_CLOCK_NOT_FOUND'); }
+    if (!readoutSet) { readoutSet = true; ctx.setReadout('ERR_CLOCK_NOT_FOUND'); ctx.setTally(tally()); }
+    if (game.done) M.mural.map.offset.x += dt * 0.01;
     // lights follow the player down the hall
     const sorted = panels.slice().sort((a, b) => Math.abs(a.x - p.x) - Math.abs(b.x - p.x));
     for (let i = 0; i < pool.length; i++) pool[i].position.copy(sorted[i]);
@@ -232,7 +314,8 @@ export async function build({ quality, yieldFrame }) {
       grate.rotation.x += 0.9 * dt;
     }
     groanT -= dt;
-    if (groanT <= 0) { groanT = 7 + Math.random() * 9; ctx.sound.groan(); }
+    groanQuiet = Math.max(0, groanQuiet - dt);
+    if (groanT <= 0) { groanT = 7 + Math.random() * 9; if (!groanQuiet) ctx.sound.groan(); }
     // drips
     for (let i = 0; i < N; i++) {
       const d = drops[i];
@@ -270,7 +353,7 @@ export async function build({ quality, yieldFrame }) {
   }
 
   return {
-    meta, group, lights, colliders, update, onExit,
+    meta, group, lights, colliders, update, onExit, interact,
     bounds: { minX: 0, maxX: LEN, minZ: -hw, maxZ: hw },
     trigger, nearGoal,
     exitPath: (from) => [new THREE.Vector3(from.x + 0.05, 1.3, from.z), new THREE.Vector3(from.x + 0.1, -1.4, from.z), new THREE.Vector3(from.x + 0.1, -7.5, from.z)],
@@ -279,6 +362,6 @@ export async function build({ quality, yieldFrame }) {
     fog: new THREE.FogExp2(0x0b1016, 0.022),
     background: 0x0b1016,
     exposure: 0.95,
-    debug: { cubes, grate, panels, door: M.door, get doorLevel() { return doorLevel; }, DOOR_PERIOD, DOOR_LIT, DOOR_DARK_UNTIL, DOOR_STUTTER },
+    debug: { game, mural: M.mural, heap: { x: HEAP_X, z: HEAP_Z }, cubes, grate, panels, door: M.door, get doorLevel() { return doorLevel; }, DOOR_PERIOD, DOOR_LIT, DOOR_DARK_UNTIL, DOOR_STUTTER },
   };
 }

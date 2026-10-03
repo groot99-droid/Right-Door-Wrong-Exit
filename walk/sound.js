@@ -1,7 +1,8 @@
 // Small synthesized sounds for the walk scenes (WebAudio, no files): the hum of the
 // mutated room, the digital chime of the anomaly, a drip, a metal groan and the radar
-// ping. The chapter's own track (script.js's sectionAudio) keeps playing underneath;
-// these sit on a master gain that follows the game's SOUND ON / OFF toggle.
+// ping, and for the mini games a pickup thunk, a wrong-guess blip and a three-note win.
+// The chapter's own track (script.js's sectionAudio) keeps playing underneath; these sit
+// on a master gain that follows the game's SOUND ON / OFF toggle.
 let ctx = null;
 let master = null;
 let enabled = true;
@@ -188,6 +189,73 @@ export function click() {
   o.connect(og).connect(master);
   o.start(t);
   o.stop(t + 0.1);
+}
+
+// Taking or placing something in a mini game: a dull thunk with a scrape of paper or tin.
+export function pickup() {
+  const c = context();
+  if (!c) return;
+  const t = c.currentTime;
+  const len = 0.07;
+  const buf = c.createBuffer(1, Math.ceil(c.sampleRate * len), c.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 2);
+  const src = c.createBufferSource();
+  src.buffer = buf;
+  const f = c.createBiquadFilter();
+  f.type = 'bandpass';
+  f.frequency.value = 1400;
+  f.Q.value = 0.8;
+  const g = c.createGain();
+  g.gain.setValueAtTime(0.18, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + len + 0.03);
+  src.connect(f).connect(g).connect(master);
+  src.start(t);
+  const o = c.createOscillator();
+  const og = c.createGain();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(190, t);
+  o.frequency.exponentialRampToValueAtTime(90, t + 0.12);
+  env(og, t, 0.004, 0.02, 0.14, 0.2);
+  o.connect(og).connect(master);
+  o.start(t);
+  o.stop(t + 0.25);
+}
+
+// A wrong guess: a low square blip that falls away.
+export function wrong() {
+  const c = context();
+  if (!c) return;
+  const t = c.currentTime;
+  const o = c.createOscillator();
+  const g = c.createGain();
+  const f = c.createBiquadFilter();
+  o.type = 'square';
+  o.frequency.setValueAtTime(220, t);
+  o.frequency.exponentialRampToValueAtTime(110, t + 0.22);
+  f.type = 'lowpass';
+  f.frequency.value = 900;
+  env(g, t, 0.005, 0.08, 0.2, 0.06);
+  o.connect(f).connect(g).connect(master);
+  o.start(t);
+  o.stop(t + 0.4);
+}
+
+// A mini game finished: three soft rising notes, the anomaly's chime stretched out.
+export function win() {
+  const c = context();
+  if (!c) return;
+  const t = c.currentTime;
+  [[659.25, 0], [880, 0.18], [1318.5, 0.36]].forEach(([fr, dl]) => {
+    const o = c.createOscillator();
+    const g = c.createGain();
+    o.type = 'sine';
+    o.frequency.value = fr;
+    env(g, t + dl, 0.01, 0.16, 0.8, 0.15);
+    o.connect(g).connect(master);
+    o.start(t + dl);
+    o.stop(t + dl + 1.1);
+  });
 }
 
 // Stops the sustained sounds (the hum and the buzz) when a walk ends.

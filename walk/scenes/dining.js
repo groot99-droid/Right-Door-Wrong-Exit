@@ -3,11 +3,17 @@
 // ceramic lamp, a wall of family photographs, sheer curtains on the right, and the
 // dark, steep, green-carpeted stairwell in the back wall that the player has to reach.
 //
+// "They said to wait in the dining room": someone was getting ready for guests. The good
+// china is stacked in crooked towers in the corner with the folded tablecloths, and a short
+// stack waits on the sideboard. The bonus game (it never touches the stairs): each time the
+// lamp clicks off, one of the photographs on the wall changes. Find it.
+//
 // Coordinates: three.js metres, y up. The player starts at the front of the room
 // (positive z) looking down -z at the stairs.
 import * as THREE from 'three';
 import * as T from '../textures.js';
 import { pbr, place, box, cyl, sphere, lathe, createBuilder, cycle } from '../build.js';
+import { stack, rng } from '../piles.js';
 
 export const meta = {
   id: 'dining',
@@ -69,6 +75,9 @@ export async function build({ quality, yieldFrame }) {
     domeLight: pbr(null, { name: 'dome_light', color: '#fff8ea', roughness: 0.6, env: 0.2, emissive: '#fff1d6', emissiveIntensity: 1.4, castShadow: false }),
     door: pbr(oak, { name: 'top_door', color: '#5a4630', roughness: 0.6, env: 0.15, worldUV: true, tile: 0.8 }),
     dark: pbr(null, { name: 'void', color: '#050505', roughness: 1, env: 0, castShadow: false }),
+    china: pbr(null, { name: 'china', color: '#f3efe6', roughness: 0.16, env: 1.2 }),
+    linen: pbr(null, { name: 'linen', color: '#ece3cf', roughness: 0.95, env: 0.12 }),
+    damask: pbr(null, { name: 'damask', color: '#d8c7a4', roughness: 0.9, env: 0.15 }),
   };
 
   const B = createBuilder();
@@ -199,6 +208,7 @@ export async function build({ quality, yieldFrame }) {
 
   // --- photo wall -------------------------------------------------------------------
   const PZ = -hz + 0.012;
+  const prints = [];  // the photographs, for the game: mesh, material, its own print, size
   const photos = [
     [-2.3, 1.72, 0.2, 0.26, 'dark'], [-2.02, 1.86, 0.17, 0.2, 'gilt'], [-1.72, 1.78, 0.26, 0.3, 'dark'],
     [-2.28, 1.42, 0.16, 0.2, 'gilt'], [-2.0, 1.5, 0.22, 0.26, 'dark'], [-1.68, 1.44, 0.18, 0.22, 'gilt'],
@@ -210,7 +220,8 @@ export async function build({ quality, yieldFrame }) {
     B.add(box(pw + 0.01, ph + 0.01, 0.004), M.matBoard, place(px, py, PZ + 0.027));
     const tex = T.photo(Math.max(128, S / 4), { seed: 100 + i * 7, warm: i % 3 !== 1 });
     const pm = pbr(tex, { name: 'photo_' + i, roughness: 0.55, env: 0.6, worldUV: false, castShadow: false });
-    B.mesh(new THREE.PlaneGeometry(pw - 0.03, ph - 0.03), pm, place(px, py, PZ + 0.0305));
+    const mesh = B.mesh(new THREE.PlaneGeometry(pw - 0.03, ph - 0.03), pm, place(px, py, PZ + 0.0305));
+    prints.push({ mesh, mat: pm, map: pm.map, x: px, y: py, z: PZ + 0.0305, size: Math.max(pw, ph) / 2 });
   });
   // light switch by the stairs
   B.add(box(0.075, 0.12, 0.008), M.switchPlate, place(-0.78, 1.22, PZ + 0.004));
@@ -233,6 +244,19 @@ export async function build({ quality, yieldFrame }) {
   B.add(cyl(0.012, 0.012, CZ1 - CZ0 + 0.2, 8), M.rod, place(CX + 0.02, CY1 + 0.04, (CZ0 + CZ1) / 2, 0, Math.PI / 2));
   B.add(sphere(0.025, 8, 6), M.rod, place(CX + 0.02, CY1 + 0.04, CZ0 - 0.1));
   B.add(sphere(0.025, 8, 6), M.rod, place(CX + 0.02, CY1 + 0.04, CZ1 + 0.1));
+
+  // --- the good china: crooked towers and folded tablecloths in the corner ---------------------
+  const plate = lathe([[0, 0], [0.075, 0], [0.1, 0.011], [0.125, 0.02], [0.12, 0.023], [0.08, 0.01], [0, 0.009]], 14);
+  const PLATE = [[plate, M.china, null]];
+  const cloth = box(0.36, 0.045, 0.27);
+  stack(B, PLATE, { x: 2.3, z: 0.42, count: 19, h: 0.017, lean: 0.06, twist: 0.3, jitter: 0.006, seed: 61 });
+  stack(B, PLATE, { x: 2.0, z: 0.72, count: 13, h: 0.017, lean: -0.05, twist: 0.3, jitter: 0.006, seed: 62 });
+  stack(B, PLATE, { x: 2.33, z: 0.98, ry: 0.5, count: 24, h: 0.017, lean: 0.08, twist: 0.3, jitter: 0.006, seed: 63 });
+  stack(B, [[cloth, M.linen, null]], { x: 2.28, z: 1.42, ry: 0.25, count: 8, h: 0.045, twist: 0.12, jitter: 0.02, seed: 64 });
+  stack(B, [[cloth, M.damask, null]], { x: 1.94, z: 1.3, ry: -0.35, count: 5, h: 0.045, twist: 0.12, jitter: 0.02, seed: 65 });
+  B.collider(2.18, 0.92, 0.84, 1.36);
+  // and a short stack on the sideboard, ready to be laid
+  stack(B, PLATE, { x: SBX + 0.02, z: SBZ + 0.38, y: SBH, count: 9, h: 0.017, lean: 0.01, twist: 0.3, jitter: 0.004, seed: 66 });
 
   // --- ceiling fixture --------------------------------------------------------------------
   B.add(sphere(0.19, 20, 10), M.domeLight, place(TX, h + 0.03, TZ + 0.1));
@@ -283,6 +307,57 @@ export async function build({ quality, yieldFrame }) {
     new THREE.Vector3(sx, 1.62 + topY, zEnd - 0.25),
   ];
 
+  // --- the bonus: while the lamp is off, a photograph changes -----------------------------------
+  // Turned upside down, gone to grey lines (the log: the grain "disappeared into gray lines"),
+  // or gone dark. Every photo is a target while a change is waiting, so the prompt gives
+  // nothing away; three found and the lamp stays on.
+  const greyLines = T.canvasTexture(64, 64, (g, w, hh) => {
+    g.fillStyle = '#8c8b87';
+    g.fillRect(0, 0, w, hh);
+    for (let y = 0; y < hh; y += 2) { g.fillStyle = (y / 2) % 2 ? '#6d6c68' : '#a8a7a2'; g.fillRect(0, y, w, 1); }
+  });
+  const KINDS = ['upside down', 'grey lines', 'dark'];
+  const order = prints.map((_, i) => i);
+  { const r = rng(77); for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; } }
+  const game = { photos: prints, changed: -1, kind: null, round: 0, found: 0, done: false, misses: 0 };
+  const WANT = 3;
+  function change(i, kind) {
+    const w = prints[i];
+    if (kind === 'upside down') w.mesh.rotation.z = Math.PI;
+    else if (kind === 'grey lines') w.mat.map = greyLines;
+    else w.mat.color.set('#1b1815');
+  }
+  function restore(i) {
+    const w = prints[i];
+    w.mesh.rotation.z = 0;
+    w.mat.map = w.map;
+    w.mat.color.set('#ffffff');
+  }
+  const interact = prints.map((w, i) => ({
+    x: w.x, y: w.y, z: w.z, reach: 2.2, size: w.size, label: 'THAT ONE?',
+    enabled: () => game.changed >= 0,
+    use(ctx) {
+      if (i !== game.changed) {
+        game.misses++;
+        ctx.sound.wrong();
+        ctx.setTally(`SOMETHING ON THE WALL CHANGED  ·  NOT THAT ONE`);
+        return;
+      }
+      restore(i);
+      game.changed = -1;
+      game.kind = null;
+      game.found++;
+      if (game.found >= WANT) {
+        game.done = true;
+        ctx.sound.win();
+        ctx.setTally(`FOUND ${game.found}/${WANT}  ·  THE ROOM HOLDS STILL`);
+      } else {
+        ctx.sound.pickup();
+        ctx.setTally(`FOUND ${game.found}/${WANT}`);
+      }
+    },
+  }));
+
   // --- the lamp clicks off, as in the clip ----------------------------------------------
   const shadeGlow = M.shade.emissiveIntensity, bulbGlow = M.bulb.emissiveIntensity, lampPower = lamp.intensity;
   const shadeColor = M.shade.color.clone();
@@ -291,8 +366,19 @@ export async function build({ quality, yieldFrame }) {
     if (dt === undefined) return;
     elapsed += dt;
     const ph = cycle(elapsed, LAMP_PERIOD);
-    const wantOn = !(ph > LAMP_OFF_AT && ph < LAMP_OFF_AT + LAMP_OFF / LAMP_PERIOD);
-    if (wantOn !== lampOn) { lampOn = wantOn; ctx.sound.click(); }
+    // once the three are found the room is anchored: the lamp stays on
+    const wantOn = game.done || !(ph > LAMP_OFF_AT && ph < LAMP_OFF_AT + LAMP_OFF / LAMP_PERIOD);
+    if (wantOn !== lampOn) {
+      lampOn = wantOn;
+      ctx.sound.click();
+      if (!lampOn && !game.done && game.changed < 0) {
+        game.changed = order[game.round % order.length];
+        game.kind = KINDS[game.round % KINDS.length];
+        game.round++;
+        change(game.changed, game.kind);
+        ctx.setTally(`SOMETHING ON THE WALL CHANGED  ·  ${game.found}/${WANT}`);
+      }
+    }
     // a switch is instant; under reduced motion the lamp fades over a second instead
     const target = lampOn ? 1 : 0;
     lampLevel = ctx.reduced ? lampLevel + (target - lampLevel) * Math.min(1, dt * 3) : target;
@@ -302,14 +388,20 @@ export async function build({ quality, yieldFrame }) {
     lamp.intensity = lampPower * lampLevel;
   }
 
+  // put a changed photo back before the room is freed, so its own print is disposed with it
+  function dispose() {
+    if (game.changed >= 0) restore(game.changed);
+    greyLines.dispose();
+  }
+
   return {
     meta,
-    group, lights, colliders, update,
+    group, lights, colliders, update, interact, dispose,
     bounds: { minX: -hx, maxX: hx, minZ: STAIR.z0 - 0.9, maxZ: hz },
     trigger, nearGoal, exitPath, exitLookAt: new THREE.Vector3(sx, topY + 1.1, zEnd - landD),
     fog: new THREE.FogExp2(0x030303, 0.045),
     background: 0x000000,
     exposure: 1.05,
-    debug: { lamp, get lampLevel() { return lampLevel; }, LAMP_PERIOD, LAMP_OFF_AT },
+    debug: { lamp, get lampLevel() { return lampLevel; }, LAMP_PERIOD, LAMP_OFF_AT, game, pile: { minX: 2.18 - 0.42, maxX: 2.18 + 0.42, minZ: 0.92 - 0.68, maxZ: 0.92 + 0.68 } },
   };
 }

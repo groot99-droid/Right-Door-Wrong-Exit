@@ -10,7 +10,9 @@
 // `walk.debug.current` with deterministic steps: screenshots, the scene's own checks
 // (collision, animation, the maze's solvability, the treadmill wrap), the scripted route
 // to the exit, and then that the right loading clip (or the title card, after the last
-// room) follows. Reports draw calls, triangles and console errors to tools/out/report.json.
+// room) follows. In the rooms with a mini game it also checks the room's piles are solid,
+// plays the game through with "use" (a tap on the prompt in --mobile), and checks the exit
+// was open before it was played. Reports draw calls, triangles and console errors to tools/out/report.json.
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -96,7 +98,31 @@ const W = {
   },
   exitProgress: async ([n]) => { const c = (await import('./walk/walk.js')).debug.current; if (!c) return null; c.sim(1 / 60, n); c.step(1 / 60, 0); return { state: c.state, camY: +c.camera.position.y.toFixed(2), camX: +c.camera.position.x.toFixed(2), camZ: +c.camera.position.z.toFixed(2) }; },
   finishExit: async () => { const c = (await import('./walk/walk.js')).debug.current; if (c) c.sim(1 / 60, 600); },
+  // stand at (sx, sz), look at (tx, ty, tz): what the prompt offers there
+  aimAt: async ([tx, ty, tz, sx, sz]) => {
+    const m = await import('./walk/walk.js');
+    const c = m.debug.current;
+    c.controls.setPosition(sx, 1.62, sz);
+    c.controls.lookAt(new m.debug.THREE.Vector3(tx, ty, tz));
+    c.step(1 / 60, 1);
+    const btn = document.getElementById('walkUse');
+    return { target: c.target, prompt: btn.classList.contains('visible') ? btn.textContent : '', tally: document.getElementById('walkTally').textContent };
+  },
+  // press "use" (E / Space / Enter / click) for one tick
+  use: async () => {
+    const c = (await import('./walk/walk.js')).debug.current;
+    c.use();
+    c.step(1 / 60, 0);
+    return { target: c.target, tally: document.getElementById('walkTally').textContent, readout: document.getElementById('walkReadout').textContent };
+  },
 };
+
+// The closest the player's centre came to a collider box (0 = inside it).
+function gapTo(pos, b) {
+  const dx = Math.max(b.minX - pos[0], 0, pos[0] - b.maxX);
+  const dz = Math.max(b.minZ - pos[2], 0, pos[2] - b.maxZ);
+  return Math.hypot(dx, dz);
+}
 
 async function shot(page, name) {
   // pause the loop, draw one frame, capture, resume: software GL frames are slow
@@ -148,6 +174,42 @@ const CHAPTERS = {
     // the clip's one event, stretched: once a cycle the lamp clicks off, and clicks back on
     const lamp = await page.evaluate(async () => { const c = (await import('./walk/walk.js')).debug.current; const d = c.built.debug; const before = d.lamp.intensity; let off = null, on = null; for (let k = 0; k < d.LAMP_PERIOD * 60 + 60; k += 10) { c.sim(1 / 60, 10); if (off === null && d.lamp.intensity === 0) off = k / 60; else if (off !== null && on === null && d.lamp.intensity > 0) on = k / 60; } return { before: +before.toFixed(1), off, on }; });
     check('the lamp clicks off once a cycle, and back on', lamp.before > 0 && lamp.off !== null && lamp.on !== null, JSON.stringify(lamp));
+    // the good china: a solid pile in the corner
+    const pile = await page.evaluate(async () => (await import('./walk/walk.js')).debug.current.built.debug.pile);
+    await page.evaluate(W.place, [2.18, 2.3, 0, 0]);
+    const pb = await page.evaluate(W.walk, ['forward', 120]);
+    check('the china in the corner is solid', gapTo(pb, pile) > 0.26, `stopped at z ${pb[2]}, pile ends at ${pile.maxZ.toFixed(2)}`);
+    await page.evaluate(W.place, [0.6, 2.6, -0.95, -0.35]);
+    await shot(page, 'dining_china');
+    // Lights Out: while the lamp is off a photograph changes; find three
+    const g0 = await page.evaluate(async () => { const c = (await import('./walk/walk.js')).debug.current; const g = c.built.debug.game; return { done: g.done, found: g.found, trigger: c.built.trigger }; });
+    check('Lights Out is a bonus: the stairs are open before it is played', !g0.done && g0.found === 0 && g0.trigger.maxX > g0.trigger.minX, JSON.stringify(g0));
+    const rounds = [];
+    for (let k = 0; k < 3; k++) {
+      const ch = await page.evaluate(async () => {
+        const c = (await import('./walk/walk.js')).debug.current;
+        const g = c.built.debug.game;
+        let n = 0;
+        while (g.changed < 0 && n++ < 400) c.sim(1 / 60, 10);
+        c.step(1 / 60, 0);
+        return { changed: g.changed, kind: g.kind, spots: g.photos.map((p) => [p.x, p.y, p.z]), tally: document.getElementById('walkTally').textContent };
+      });
+      if (ch.changed < 0) { rounds.push({ k, error: 'nothing changed' }); break; }
+      const right = ch.spots[ch.changed], wrong = ch.spots[(ch.changed + 1) % ch.spots.length];
+      const aw = await page.evaluate(W.aimAt, [wrong[0], wrong[1], wrong[2], wrong[0] + 0.3, -2.5]);
+      await page.evaluate(W.use);
+      const afterWrong = await page.evaluate(async () => (await import('./walk/walk.js')).debug.current.built.debug.game.found);
+      if (k === 0) await shot(page, 'dining_photo_changed');
+      const ar = await page.evaluate(W.aimAt, [right[0], right[1], right[2], right[0] + 0.3, -2.5]);
+      const ur = await page.evaluate(W.use);
+      const afterRight = await page.evaluate(async () => { const g = (await import('./walk/walk.js')).debug.current.built.debug.game; return { found: g.found, changed: g.changed, done: g.done }; });
+      rounds.push({ k, kind: ch.kind, tally: ch.tally, wrongTarget: aw.target, afterWrong, rightTarget: ar.target, afterRight, finalTally: ur.tally });
+    }
+    const okRounds = rounds.length === 3 && rounds.every((r, k) => r.wrongTarget === 'THAT ONE?' && r.afterWrong === k && r.rightTarget === 'THAT ONE?' && r.afterRight && r.afterRight.found === k + 1 && r.afterRight.changed === -1 && /SOMETHING ON THE WALL CHANGED/.test(r.tally));
+    check('a photograph changes each time the lamp goes off; a wrong guess counts nothing, the right one is put back', okRounds, JSON.stringify(rounds.map((r) => ({ kind: r.kind, wrong: r.afterWrong, found: r.afterRight && r.afterRight.found, err: r.error }))));
+    check('three found ends the game', rounds[2] && rounds[2].afterRight && rounds[2].afterRight.done && /THE ROOM HOLDS STILL/.test(rounds[2].finalTally), rounds[2] ? rounds[2].finalTally : 'no third round');
+    const held = await page.evaluate(async () => { const c = (await import('./walk/walk.js')).debug.current; const d = c.built.debug; let min = 99; for (let k = 0; k < d.LAMP_PERIOD * 60 + 60; k += 10) { c.sim(1 / 60, 10); min = Math.min(min, d.lamp.intensity); } return +min.toFixed(2); });
+    check('and the lamp stays on after it', held > 0, `lowest lamp intensity over a cycle ${held}`);
     await page.evaluate(W.place, [-1.4, -2.9, Math.atan2(-1.35, 0.3), 0]); // forward = (-sin yaw, -cos yaw): toward the stair foot
     await shot(page, 'dining_stairs');
     const e = await page.evaluate(W.forwardUntilExit, [60]);
@@ -224,6 +286,29 @@ const CHAPTERS = {
     // over one full cycle the door is dark for most of it, and bright for the rest
     const door = await page.evaluate(async () => { const c = (await import('./walk/walk.js')).debug.current; const d = c.built.debug; let dark = 0, lit = 0, n = 0; for (let k = 0; k < d.DOOR_PERIOD * 60; k += 6) { c.sim(1 / 60, 6); n++; if (d.doorLevel < 0.1) dark++; else if (d.doorLevel > 0.8) lit++; } return { dark: +(dark / n).toFixed(2), lit: +(lit / n).toFixed(2) }; });
     check('the red door is dark for most of its cycle, then lights up', door.dark > 0.5 && door.lit > 0.2, JSON.stringify(door));
+    // the sodden heaps are solid
+    const fg = await page.evaluate(async () => { const c = (await import('./walk/walk.js')).debug.current; const d = c.built.debug; return { heaps: d.game.heaps, heap: d.heap, heapTop: d.game.heaps && c.built.interact[0].y, frames: d.game.frames.map((f) => f.x), trigger: c.built.trigger, tally: document.getElementById('walkTally').textContent }; });
+    await page.evaluate(W.place, [fg.heap.x, 0.9, 0, 0]);
+    const hb = await page.evaluate(W.walk, ['forward', 120]);
+    check('the heap of sodden boxes is solid', gapTo(hb, fg.heaps[0]) > 0.26, `stopped at z ${hb[2]}, heap ends at ${fg.heaps[0].maxZ.toFixed(2)}`);
+    check('Fill the Frames is a bonus: the grate is open before it is played', fg.tally === 'PHOTOGRAPHS HUNG 0/3' && fg.trigger.maxX > fg.trigger.minX, fg.tally);
+    await page.evaluate(W.place, [4.4, 0.4, -0.95, -0.4]);
+    await shot(page, 'flooded_heap');
+    const hangs = [];
+    for (let k = 0; k < 3; k++) {
+      const ah = await page.evaluate(W.aimAt, [fg.heap.x, fg.heapTop, fg.heap.z, fg.heap.x - 1, 0.4]);
+      const uh = await page.evaluate(W.use);
+      const fx = fg.frames[k + 1];
+      const af = await page.evaluate(W.aimAt, [fx, 2.0, 1.55, fx - 0.6, 0.6]);
+      const uf = await page.evaluate(W.use);
+      const ph = await page.evaluate(async (fx) => { const g = (await import('./walk/walk.js')).debug.current.built.debug.game; const p = g.photos.find((q) => q.state === 'hung' && g.frames[q.frame].x === fx); return p ? p.mesh.position.toArray().map((v) => +v.toFixed(2)) : null; }, fx);
+      hangs.push({ take: ah.target, carrying: uh.tally, hang: af.target, at: ph, tally: uf.tally });
+    }
+    check('take a photograph off the heap and hang it, three times', hangs.every((h, k) => h.take === 'TAKE A PHOTOGRAPH' && /CARRYING A PHOTOGRAPH/.test(h.carrying) && h.hang === 'HANG IT' && h.at && h.at[0] === fg.frames[k + 1] && h.at[1] === 2 && h.at[2] > 1.5), JSON.stringify(hangs));
+    const sky = await page.evaluate(async () => { const c = (await import('./walk/walk.js')).debug.current; const m = c.built.debug.mural.map; const a = m.offset.x; c.sim(1 / 60, 120); return { moved: m.offset.x - a, done: c.built.debug.game.done, tally: document.getElementById('walkTally').textContent }; });
+    check('three hung and the painted sky moves', sky.done && sky.moved > 0.005 && sky.tally === 'PHOTOGRAPHS HUNG 3/3  ·  THE SKY MOVES', JSON.stringify(sky));
+    await page.evaluate(W.place, [2.0, -0.2, -Math.PI / 2 - 0.55, 0.1]);
+    await shot(page, 'flooded_frames');
     await page.evaluate(W.place, [28.6, 0.4, -Math.PI / 2, -0.35]);
     await shot(page, 'flooded_grate');
     const e = await page.evaluate(W.forwardUntilExit, [60]);
@@ -287,6 +372,54 @@ const CHAPTERS = {
     const ping = await page.evaluate(W.info);
     check('the anomaly pings when you come near the cart', ping.readout === 'PING_DETECTED_0x8F', ping.readout);
     await shot(page, 'grocery_cart');
+    // what is left: tins in the dead ends
+    const gg = await page.evaluate(async () => {
+      const c = (await import('./walk/walk.js')).debug.current;
+      const d = c.built.debug;
+      const { wall } = d.maze;
+      return {
+        piles: d.game.piles.map((p) => ({ ...p, closed: [[-1, 0], [1, 0], [0, -1], [0, 1]].filter(([dr, dc]) => wall[p.r + dr][p.c + dc]).length, centre: d.cellToWorld(p.r, p.c) })),
+        tins: d.game.tins, trigger: c.built.trigger, tally: document.getElementById('walkTally').textContent,
+      };
+    });
+    check('the tins are piled only in dead ends, so no aisle is blocked', gg.piles.length >= 3 && gg.piles.every((p) => p.closed === 3), JSON.stringify(gg.piles.map((p) => [p.r, p.c, p.closed])));
+    check('Shopping List is a bonus: the EXIT is open before it is played', gg.tally === 'RED TINS 0/3' && gg.trigger.maxX > gg.trigger.minX, gg.tally);
+    const games = gg.piles.filter((p) => p.game);
+    // walk from the aisle into a pile: it stops you
+    const into = async (p) => {
+      const cx = (p.collider.minX + p.collider.maxX) / 2, cz = (p.collider.minZ + p.collider.maxZ) / 2;
+      const yaw = Math.atan2(-(cx - p.centre[0]), -(cz - p.centre[1]));
+      await page.evaluate(W.place, [p.centre[0], p.centre[1], yaw, 0]);
+      return gapTo(await page.evaluate(W.walk, ['forward', 120]), p.collider);
+    };
+    const gap0 = await into(games[0]);
+    check('a pyramid of tins is solid', gap0 > 0.26, `gap ${gap0.toFixed(2)}`);
+    const takes = [];
+    for (let k = 0; k < gg.tins.length; k++) {
+      const t = gg.tins[k], p = games[k];
+      const a = await page.evaluate(W.aimAt, [t.x, t.y, t.z, p.centre[0], p.centre[1]]);
+      if (k === 0) await shot(page, 'grocery_red_tin');
+      let u;
+      if (k === 0 && opt.mobile) {
+        // on a phone the prompt is the button
+        await page.tap('#walkUse');
+        u = await page.evaluate(async () => { const c = (await import('./walk/walk.js')).debug.current; c.sim(1 / 60, 1); c.step(1 / 60, 0); return { tally: document.getElementById('walkTally').textContent }; });
+      } else u = await page.evaluate(W.use);
+      const taken = await page.evaluate(async (k) => (await import('./walk/walk.js')).debug.current.built.debug.game.tins[k].taken, k);
+      takes.push({ target: a.target, prompt: a.prompt, taken, tally: u.tally });
+    }
+    const key = opt.mobile ? 'TAP' : 'E';
+    check(`the prompt offers the red tin (${key} to take it)`, takes.every((t) => t.target === 'TAKE THE RED TIN' && t.prompt.startsWith(key)), JSON.stringify(takes.map((t) => t.prompt)));
+    check('each red tin can be taken, and is counted', takes.every((t, k) => t.taken && t.tally.startsWith(`RED TINS ${k + 1}/${takes.length}`)), JSON.stringify(takes.map((t) => t.tally)));
+    const gap1 = await into(games[0]);
+    check('the pyramid stays solid once its red tin is taken', gap1 > 0.26, `gap ${gap1.toFixed(2)}`);
+    const cart2 = await page.evaluate(async () => (await import('./walk/walk.js')).debug.current.built.debug.cart);
+    const ac = await page.evaluate(W.aimAt, [cart2.x, 0.85, cart2.z, cart2.x, cart2.z - 1.3]);
+    const uc = await page.evaluate(W.use);
+    const basket = await page.evaluate(async () => { const d = (await import('./walk/walk.js')).debug.current.built.debug; const m = new (await import('./walk/walk.js')).debug.THREE.Matrix4(); const n = d.game.tins.length; const ys = []; for (let i = 0; i < n; i++) { d.redBodies.getMatrixAt(n + i, m); ys.push(+m.elements[13].toFixed(2)); } return { done: d.game.done, ys }; });
+    check('the red tins go back in the cart', ac.target === 'PUT THEM IN THE CART' && basket.done && basket.ys.every((y) => y > 0.6 && y < 0.8) && uc.readout === 'PING_ACKNOWLEDGED' && /LIST COMPLETE/.test(uc.tally), JSON.stringify({ target: ac.target, basket, readout: uc.readout, tally: uc.tally }));
+    await page.evaluate(W.place, [cart2.x + 0.4, cart2.z - 1.8, 0.2 + Math.PI, -0.35]);
+    await shot(page, 'grocery_cart_full');
     const ex = await page.evaluate(async () => (await import('./walk/walk.js')).debug.current.built.debug.exit);
     await page.evaluate(W.place, [ex.x, ex.z + 3.2, 0, 0]);
     await shot(page, 'grocery_exit');
