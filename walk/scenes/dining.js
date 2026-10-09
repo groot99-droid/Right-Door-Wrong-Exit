@@ -4,9 +4,10 @@
 // dark, steep, green-carpeted stairwell in the back wall that the player has to reach.
 //
 // "They said to wait in the dining room": someone was getting ready for guests. The good
-// china is stacked in crooked towers in the corner with the folded tablecloths, and a short
-// stack waits on the sideboard. The bonus game (it never touches the stairs): each time the
-// lamp clicks off, one of the photographs on the wall changes. Find it.
+// china is stacked in crooked towers against the right wall, between the curtains and the front
+// wall, with the folded tablecloths, and a short stack waits on the sideboard. The bonus game (it
+// never touches the stairs): when the lamp clicks off, one of the photographs on the wall changes,
+// and stays changed until it is found; the next changes at the first lamp-off after that.
 //
 // Coordinates: three.js metres, y up. The player starts at the front of the room
 // (positive z) looking down -z at the stairs.
@@ -127,8 +128,10 @@ export async function build({ quality, yieldFrame }) {
   // stairwell walls, sloped ceiling and the dark door at the top
   const wallLen = runTotal + landD + TH;
   const wallH = topY + 2.15;
-  B.add(box(TH, wallH, wallLen), M.wallDark, place(STAIR.x0 - TH / 2, wallH / 2, STAIR.z0 - wallLen / 2));
-  B.add(box(TH, wallH, wallLen), M.wallDark, place(STAIR.x1 + TH / 2, wallH / 2, STAIR.z0 - wallLen / 2));
+  // set 2 mm back from the opening's reveals and from the back wall's room face, so no face of
+  // theirs lies in one of the back wall's: the back wall's face is the one that shows
+  B.add(box(TH, wallH, wallLen - 0.002), M.wallDark, place(STAIR.x0 - TH / 2 - 0.002, wallH / 2, STAIR.z0 - 0.002 - (wallLen - 0.002) / 2));
+  B.add(box(TH, wallH, wallLen - 0.002), M.wallDark, place(STAIR.x1 + TH / 2 + 0.002, wallH / 2, STAIR.z0 - 0.002 - (wallLen - 0.002) / 2));
   const slope = Math.atan2(topY, runTotal);
   const ceilLen = Math.hypot(topY, runTotal) + 0.3;
   B.add(box(openW + 2 * TH, TH, ceilLen), M.wallDark,
@@ -143,7 +146,9 @@ export async function build({ quality, yieldFrame }) {
   // the door at the top: a dark panel with a hair of light around it
   B.add(box(0.9, 2.0, 0.05), M.door, place(sx, topY + 1.0, zEnd - landD + 0.03));
   B.add(box(1.0, 2.08, 0.02), M.bulb, place(sx, topY + 1.04, zEnd - landD + 0.005));
-  B.add(box(openW + 2 * TH, wallH, TH), M.dark, place(sx, wallH / 2, zEnd - landD - TH / 2));
+  // the black past the door: its sides stop 4 mm inside the landing ceiling's sides, buried in the
+  // stairwell walls
+  B.add(box(openW + 2 * TH - 0.008, wallH, TH), M.dark, place(sx, wallH / 2, zEnd - landD - TH / 2));
 
   // --- table -----------------------------------------------------------------------
   const TX = 0.15, TZ = -0.55, TR = 0.62, TH_TOP = 0.74;
@@ -245,18 +250,36 @@ export async function build({ quality, yieldFrame }) {
   B.add(sphere(0.025, 8, 6), M.rod, place(CX + 0.02, CY1 + 0.04, CZ0 - 0.1));
   B.add(sphere(0.025, 8, 6), M.rod, place(CX + 0.02, CY1 + 0.04, CZ1 + 0.1));
 
-  // --- the good china: crooked towers and folded tablecloths in the corner ---------------------
+  // --- the good china: crooked towers and folded tablecloths against the right wall, between the
+  // curtains and the front wall -----------------------------------------------------------------
+  // Each plate stands 17 mm over the one below it, a few millimetres clear of its well (stack()
+  // measures the plate, so it never comes lower than resting in it), and each cloth lies on the floor
+  // or on the cloth below. The towers stand apart, and the damask is folded thinner than the linen
+  // beside it, so where two stacks come close their layers never share a height.
   const plate = lathe([[0, 0], [0.075, 0], [0.1, 0.011], [0.125, 0.02], [0.12, 0.023], [0.08, 0.01], [0, 0.009]], 14);
   const PLATE = [[plate, M.china, null]];
-  const cloth = box(0.36, 0.045, 0.27);
-  stack(B, PLATE, { x: 2.3, z: 0.42, count: 19, h: 0.017, lean: 0.06, twist: 0.3, jitter: 0.006, seed: 61 });
-  stack(B, PLATE, { x: 2.0, z: 0.72, count: 13, h: 0.017, lean: -0.05, twist: 0.3, jitter: 0.006, seed: 62 });
-  stack(B, PLATE, { x: 2.33, z: 0.98, ry: 0.5, count: 24, h: 0.017, lean: 0.08, twist: 0.3, jitter: 0.006, seed: 63 });
-  stack(B, [[cloth, M.linen, null]], { x: 2.28, z: 1.42, ry: 0.25, count: 8, h: 0.045, twist: 0.12, jitter: 0.02, seed: 64 });
-  stack(B, [[cloth, M.damask, null]], { x: 1.94, z: 1.3, ry: -0.35, count: 5, h: 0.045, twist: 0.12, jitter: 0.02, seed: 65 });
-  B.collider(2.18, 0.92, 0.84, 1.36);
-  // and a short stack on the sideboard, ready to be laid
-  stack(B, PLATE, { x: SBX + 0.02, z: SBZ + 0.38, y: SBH, count: 9, h: 0.017, lean: 0.01, twist: 0.3, jitter: 0.004, seed: 66 });
+  const LINEN = [[box(0.36, 0.045, 0.27), M.linen, null]], DAMASK = [[box(0.36, 0.04, 0.27), M.damask, null]];
+  const towers = [
+    ['china 0', PLATE, { x: 2.3, z: 0.42, count: 19, h: 0.017, lean: 0.06, twist: 0.3, jitter: 0.006, seed: 61 }],
+    ['china 1', PLATE, { x: 2.0, z: 0.72, count: 13, h: 0.017, lean: -0.05, twist: 0.3, jitter: 0.006, seed: 62 }],
+    ['china 2', PLATE, { x: 2.33, z: 0.98, ry: 0.5, count: 24, h: 0.017, lean: 0.08, twist: 0.3, jitter: 0.006, seed: 63 }],
+    ['linen', LINEN, { x: 2.28, z: 1.42, ry: 0.25, count: 8, twist: 0.12, jitter: 0.02, seed: 64 }],
+    ['damask', DAMASK, { x: 1.85, z: 1.3, ry: 0.1, count: 5, twist: 0.12, jitter: 0.02, seed: 65 }],
+  ].map(([name, item, o]) => ({ name, item, pile: stack(B, item, o) }));
+  // one collider round them all: the box of everything drawn there
+  const cb = towers.reduce((b, { pile: p }) => ({
+    minX: Math.min(b.minX, p.aabb.minX), maxX: Math.max(b.maxX, p.aabb.maxX),
+    minZ: Math.min(b.minZ, p.aabb.minZ), maxZ: Math.max(b.maxZ, p.aabb.maxZ),
+  }), { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity });
+  B.collider((cb.minX + cb.maxX) / 2, (cb.minZ + cb.maxZ) / 2, cb.maxX - cb.minX, cb.maxZ - cb.minZ);
+  const chinaPile = B.colliders[B.colliders.length - 1];
+  // and a short stack on the sideboard, ready to be laid: the first plate stands on its top
+  const ready = stack(B, PLATE, { x: SBX + 0.02, z: SBZ + 0.38, y: SBH, count: 9, h: 0.017, lean: 0.01, twist: 0.3, jitter: 0.004, seed: 66 });
+  // every pile as drawn, for the tests: { name, y, collider, pieces: [[matrix, item]] }
+  const pileItems = [
+    ...towers.map(({ name, item, pile }) => ({ name, y: 0, collider: chinaPile, pieces: pile.items.map((m) => [m, item]) })),
+    { name: 'sideboard china', y: SBH, collider: null, pieces: ready.items.map((m) => [m, PLATE]) },
+  ];
 
   // --- ceiling fixture --------------------------------------------------------------------
   B.add(sphere(0.19, 20, 10), M.domeLight, place(TX, h + 0.03, TZ + 0.1));
@@ -296,6 +319,11 @@ export async function build({ quality, yieldFrame }) {
   const stairFoot = new THREE.PointLight(0xffe4bf, 2.4, 3.2, 2);
   stairFoot.position.set(sx, 1.9, STAIR.z0 - 0.35);
   lights.add(stairFoot);
+  // a small picture light, for the game: dark until the prompt points at a photograph, then on
+  // that one from just above it (hover(), below). It is in the room from the start, so lighting a
+  // print only moves it and turns it up: the room keeps its number of lights, and nothing recompiles.
+  const pictureLight = new THREE.SpotLight(0xffe6c4, 0, 1.4, 0.3, 0.35, 2);
+  lights.add(pictureLight, pictureLight.target);
 
   // --- the goal --------------------------------------------------------------------------
   const trigger = { minX: STAIR.x0, maxX: STAIR.x1, minZ: STAIR.z0 - 0.45, maxZ: STAIR.z0 + 0.15 };
@@ -307,10 +335,12 @@ export async function build({ quality, yieldFrame }) {
     new THREE.Vector3(sx, 1.62 + topY, zEnd - 0.25),
   ];
 
-  // --- the bonus: while the lamp is off, a photograph changes -----------------------------------
+  // --- the bonus: when the lamp clicks off, a photograph changes until it is found ---------------
   // Turned upside down, gone to grey lines (the log: the grain "disappeared into gray lines"),
-  // or gone dark. Every photo is a target while a change is waiting, so the prompt gives
-  // nothing away; three found and the lamp stays on.
+  // or gone dark. It stays changed through later lamp-offs until it is found, and the next one
+  // changes at the first lamp-off after that. Every photo is a target while a change is waiting,
+  // so the prompt gives nothing away; the picture light shows which one it points at (the same
+  // light on every print, so that gives nothing away either). Three found and the lamp stays on.
   const greyLines = T.canvasTexture(64, 64, (g, w, hh) => {
     g.fillStyle = '#8c8b87';
     g.fillRect(0, 0, w, hh);
@@ -321,6 +351,9 @@ export async function build({ quality, yieldFrame }) {
   { const r = rng(77); for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; } }
   const game = { photos: prints, changed: -1, kind: null, round: 0, found: 0, done: false, misses: 0 };
   const WANT = 3;
+  // where the picture light hangs off the print it lights (metres above and out from the wall)
+  const PICTURE = { up: 0.28, out: 0.5, intensity: 2 };
+  let litPrint = -1;
   function change(i, kind) {
     const w = prints[i];
     if (kind === 'upside down') w.mesh.rotation.z = Math.PI;
@@ -336,11 +369,26 @@ export async function build({ quality, yieldFrame }) {
   const interact = prints.map((w, i) => ({
     x: w.x, y: w.y, z: w.z, reach: 2.2, size: w.size, label: 'THAT ONE?',
     enabled: () => game.changed >= 0,
+    // the print the prompt points at is under the picture light (play.js calls this as the pick
+    // changes, the old pick off before the new one on). Light, not the print's material, which
+    // only change() and restore() touch: a darkened or lined print is lit as it is.
+    hover(on) {
+      if (on) {
+        pictureLight.position.set(w.x, w.y + PICTURE.up, w.z + PICTURE.out);
+        pictureLight.target.position.set(w.x, w.y, w.z);
+        pictureLight.angle = Math.atan((w.size + 0.03) / Math.hypot(PICTURE.up, PICTURE.out));
+        pictureLight.intensity = PICTURE.intensity;
+        litPrint = i;
+      } else if (litPrint === i) {
+        pictureLight.intensity = 0;
+        litPrint = -1;
+      }
+    },
     use(ctx) {
       if (i !== game.changed) {
         game.misses++;
         ctx.sound.wrong();
-        ctx.setTally(`SOMETHING ON THE WALL CHANGED  ·  NOT THAT ONE`);
+        ctx.setTally(`NOT THAT ONE  ·  ${game.found}/${WANT}`);
         return;
       }
       restore(i);
@@ -353,7 +401,7 @@ export async function build({ quality, yieldFrame }) {
         ctx.setTally(`FOUND ${game.found}/${WANT}  ·  THE ROOM HOLDS STILL`);
       } else {
         ctx.sound.pickup();
-        ctx.setTally(`FOUND ${game.found}/${WANT}`);
+        ctx.setTally(`FOUND ${game.found}/${WANT}  ·  WAIT FOR THE LAMP`);
       }
     },
   }));
@@ -361,17 +409,20 @@ export async function build({ quality, yieldFrame }) {
   // --- the lamp clicks off, as in the clip ----------------------------------------------
   const shadeGlow = M.shade.emissiveIntensity, bulbGlow = M.bulb.emissiveIntensity, lampPower = lamp.intensity;
   const shadeColor = M.shade.color.clone();
-  let elapsed = 0, lampLevel = 1, lampOn = true;
+  let elapsed = 0, lampLevel = 1, lampOn = true, tallySet = false;
   function update(p, dt, camera, ctx) {
     if (dt === undefined) return;
     elapsed += dt;
+    // the score line from the first frame, so the room says it has a game before the first lamp-off
+    if (!tallySet) { tallySet = true; ctx.setTally(`WATCH THE PHOTOGRAPHS  ·  0/${WANT}`); }
     const ph = cycle(elapsed, LAMP_PERIOD);
     // once the three are found the room is anchored: the lamp stays on
     const wantOn = game.done || !(ph > LAMP_OFF_AT && ph < LAMP_OFF_AT + LAMP_OFF / LAMP_PERIOD);
     if (wantOn !== lampOn) {
       lampOn = wantOn;
       ctx.sound.click();
-      if (!lampOn && !game.done && game.changed < 0) {
+      // (not once the climb has begun: the game can no longer be played)
+      if (!lampOn && !game.done && game.changed < 0 && !ctx.exiting) {
         game.changed = order[game.round % order.length];
         game.kind = KINDS[game.round % KINDS.length];
         game.round++;
@@ -402,6 +453,6 @@ export async function build({ quality, yieldFrame }) {
     fog: new THREE.FogExp2(0x030303, 0.045),
     background: 0x000000,
     exposure: 1.05,
-    debug: { lamp, get lampLevel() { return lampLevel; }, LAMP_PERIOD, LAMP_OFF_AT, game, pile: { minX: 2.18 - 0.42, maxX: 2.18 + 0.42, minZ: 0.92 - 0.68, maxZ: 0.92 + 0.68 } },
+    debug: { lamp, get lampLevel() { return lampLevel; }, get elapsed() { return elapsed; }, LAMP_PERIOD, LAMP_OFF_AT, game, pictureLight, pile: chinaPile, pileItems, stair: { x0: STAIR.x0, x1: STAIR.x1 } },
   };
 }

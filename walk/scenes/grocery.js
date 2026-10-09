@@ -145,8 +145,9 @@ export async function build({ quality, yieldFrame }) {
   R.add(box(hw - EX - EW / 2, HGT, TH), M.wall, place(hw - (hw - EX - EW / 2) / 2, HGT / 2, hd + TH / 2));
   R.add(box(EW, HGT - 2.4, TH), M.wall, place(EX, 2.4 + (HGT - 2.4) / 2, hd + TH / 2));
   R.add(box(EW, 2.4, 0.05), M.glass, place(EX, 1.2, hd + 0.05));
-  for (const dx of [-EW / 2, -EW / 4, 0, EW / 4, EW / 2]) R.add(box(0.06, 2.4, 0.08), M.chrome, place(EX + dx, 1.2, hd + 0.04));
-  R.add(box(EW, 0.06, 0.08), M.chrome, place(EX, 2.4, hd + 0.04));
+  // the chrome frame stands 2 mm proud of the wall, so its front no longer lies in the wall's face
+  for (const dx of [-EW / 2, -EW / 4, 0, EW / 4, EW / 2]) R.add(box(0.06, 2.4, 0.08), M.chrome, place(EX + dx, 1.2, hd + 0.038));
+  R.add(box(EW, 0.06, 0.08), M.chrome, place(EX, 2.4, hd + 0.038));
   // ceiling and the fluorescent rows (along z, one every 4 m), the leftmost flickers
   R.add(box(W + 2 * TH, TH, D + 2 * TH), M.ceiling, place(0, HGT + TH / 2, 0));
   const rows = [];
@@ -171,9 +172,11 @@ export async function build({ quality, yieldFrame }) {
     const L = len, Dp = 1.2;
     const rot = alongZ ? Math.PI / 2 : 0;
     const at = (lx, ly, lz) => place(x, ly, z, rot).multiply(place(lx, 0, lz));
-    R.add(box(L, 0.12, Dp), M.kick, at(0, 0.06, 0));
-    R.add(box(L, H, 0.06), M.gondolaBack, at(0, H / 2, 0));
-    for (let k = 0; k * 0.4 + 0.16 < H - 0.1; k++) R.add(box(L, 0.03, Dp), M.gondola, at(0, 0.16 + k * 0.4, 0));
+    // the kick, the back panel and the shelf boards stop 3 mm inside the side panels (and the kick
+    // 3 mm behind their front edges), so no two faces share a plane at an exposed end of a run
+    R.add(box(L - 0.006, 0.12, Dp - 0.006), M.kick, at(0, 0.06, 0));
+    R.add(box(L - 0.006, H, 0.06), M.gondolaBack, at(0, H / 2, 0));
+    for (let k = 0; k * 0.4 + 0.16 < H - 0.1; k++) R.add(box(L - 0.006, 0.03, Dp), M.gondola, at(0, 0.16 + k * 0.4, 0));
     R.add(box(0.04, H, Dp), M.gondola, at(-L / 2 + 0.02, H / 2, 0));
     R.add(box(0.04, H, Dp), M.gondola, at(L / 2 - 0.02, H / 2, 0));
     R.add(box(L, 0.05, Dp), M.gondola, at(0, H + 0.02, 0));
@@ -195,11 +198,39 @@ export async function build({ quality, yieldFrame }) {
   // --- what is left: tins in the dead ends --------------------------------------------------------
   // A dead end is an aisle cell with one way in. A pile at its closed end blocks nothing (there
   // is nothing beyond it), so the maze stays solvable whatever the piles do.
-  const TIN_R = 0.045, TIN_H = 0.125;
+  const TIN_R = 0.045, TIN_H = 0.125, TIN_GAP = 0.003;
+  // The red tins (drawn on their own, below) are whole cans. A pile tin is an open body and a lid:
+  // it only ever stands on the floor or on the lids below it, so it has no bottom to lie in the
+  // glossy floor or on another lid. Body and lid are both tin, so they merge into one draw call.
   const tinBody = cyl(TIN_R, TIN_R, TIN_H, 8);
   const tinBand = cyl(TIN_R + 0.002, TIN_R + 0.002, TIN_H * 0.62, 8, true);
-  const TIN = [[tinBody, M.tin, null], [tinBand, M.band, null]];
+  const pileSide = cyl(TIN_R, TIN_R, TIN_H, 8, true);
+  const pileTop = new THREE.CircleGeometry(TIN_R, 8).rotateX(-Math.PI / 2).translate(0, TIN_H / 2, 0);
+  const TIN = [[pileSide, M.tin, null], [pileTop, M.tin, null], [tinBand, M.band, null]];
+  // a red tin, as it is drawn (on its own, below), for the tests' record of the piles
+  const RED = [[tinBody, M.redTin, null], [tinBand, M.redBand, null]];
+  // The most a pyramid of `cols` can reach either side of its middle: piles.js spaces the tins by
+  // the band's width plus the gap and keeps the jitter to 0.8 of the gap. It only makes room for
+  // the trays before the pyramid is built; the trays are then set from what the pyramid drew.
+  const pyramidHalf = (cols) => ((cols - 1) * (2 * (TIN_R + 0.002) + TIN_GAP) + 0.8 * TIN_GAP) / 2 + TIN_R + 0.002;
+  // The flats: 0.42 x 0.3 trays, each turned by its stack's yaw plus up to TRAY_TWIST, and
+  // drifting up to TRAY_JITTER. trayReach(base) is the most a stack turned by `base` from its pile
+  // can reach from its centre, along the pile's own x (u) and z (v).
   const tray = box(0.42, 0.07, 0.3);
+  const TRAY = [[tray, M.cardboard, null]];
+  const TRAY_TWIST = 0.25, TRAY_JITTER = 0.03;
+  const trayReach = (base) => {
+    let u = 0, v = 0;
+    for (let k = 0; k <= 32; k++) {
+      const t = base + TRAY_TWIST * (k / 16 - 1), c = Math.abs(Math.cos(t)), sn = Math.abs(Math.sin(t));
+      u = Math.max(u, 0.21 * c + 0.15 * sn);
+      v = Math.max(v, 0.21 * sn + 0.15 * c);
+    }
+    const drift = TRAY_JITTER * Math.SQRT1_2 + 0.002;
+    return { u: u + drift, v: v + drift };
+  };
+  const CLEAR_TIN = 0.03;    // between the trays and the tins
+  const CLEAR_SHELF = 0.02;  // between anything in a dead end and the shelving cells around it
   const deadEnds = [];
   for (let r = 1; r < ROWS - 1; r += 2) {
     for (let c = 1; c < COLS - 1; c += 2) {
@@ -223,23 +254,38 @@ export async function build({ quality, yieldFrame }) {
   for (const d of chosen) if (chosen.filter((e) => e.game).length < 3 && !d.game) d.game = true;
   const piles = [];
   const redAt = [];
+  const pileItems = [];   // every pile as drawn, for the tests: { name, y, collider, pieces: [[matrix, item]] }
   chosen.forEach((d, i) => {
     const [dr, dc] = d.open;
-    // the pile's back to the closed end, its face to the way in
+    // The pile's back to the closed end, its face to the way in. In the pile's own frame u runs
+    // across the dead end (the world's (ax, az)) and v toward the way in (the world's (dc, dr)).
+    // About the pyramid's usual place, 0.65 m short of the cell's middle, the cell spans u -1..1.
     const ry = Math.atan2(dc, dr);
-    const x = cx(d.c) - dc * 0.65, z = cz(d.r) - dr * 0.65;
+    const ax = Math.cos(ry), az = -Math.sin(ry);
     const cols = 9 + Math.floor(pr() * 4), rows = 3 + Math.floor(pr() * 2);
-    const p = pyramid(R, TIN, {
-      x, z, ry, cols, rows, layers: rows, w: TIN_R * 2, d: TIN_R * 2, h: TIN_H,
-      gap: 0.003, jitter: 0.008, seed: 900 + i * 13, hold: d.game ? 1 : 0,
-    });
-    if (d.game) redAt.push(p.held[0]);
     // a few flats of cardboard to one side
     const side = pr() < 0.5 ? -1 : 1;
-    const ax = Math.cos(ry), az = -Math.sin(ry);          // the pile's own x axis in the world
-    const tx = x + ax * side * 0.78 + dc * 0.05, tz = z + az * side * 0.78 + dr * 0.05;
-    stack(R, [[tray, M.cardboard, null]], { x: tx, z: tz, ry: ry + (pr() - 0.5) * 0.4, count: 2 + Math.floor(pr() * 4), h: 0.07, twist: 0.25, jitter: 0.03, seed: 950 + i, w: 0.42, d: 0.3, collide: true });
-    piles.push({ r: d.r, c: d.c, game: !!d.game, collider: p.collider });
+    const turn = (pr() - 0.5) * 0.4, count = 2 + Math.floor(pr() * 4);
+    const reach = trayReach(turn);
+    // The pyramid, the clearance and the trays must fit across the cell, short of the shelving;
+    // where they would not, the pyramid moves over, away from the trays.
+    const over = Math.max(0, pyramidHalf(cols) + CLEAR_TIN + 2 * reach.u - (CELL / 2 - CLEAR_SHELF));
+    const x = cx(d.c) - dc * 0.65 - ax * side * over, z = cz(d.r) - dr * 0.65 - az * side * over;
+    const p = pyramid(R, TIN, {
+      x, z, ry, cols, rows, layers: rows, gap: TIN_GAP, jitter: 0.008, seed: 900 + i * 13, hold: d.game ? 1 : 0,
+    });
+    if (d.game) redAt.push(p.held[0]);
+    // The trays stand CLEAR_TIN off the side of the tins as drawn, level with the pyramid's middle
+    // and 5 cm toward the way in. The first rests on the floor; the stack is solid as drawn.
+    const tu = side * ((side > 0 ? p.bounds.maxX : -p.bounds.minX) + CLEAR_TIN + reach.u);
+    const tv = (p.bounds.minZ + p.bounds.maxZ) / 2 + 0.05;
+    const trays = stack(R, TRAY, {
+      x: x + ax * tu + dc * tv, z: z + az * tu + dr * tv, ry: ry + turn, count, h: 0.07,
+      twist: TRAY_TWIST, jitter: TRAY_JITTER, seed: 950 + i, collide: true,
+    });
+    piles.push({ r: d.r, c: d.c, game: !!d.game, collider: p.collider, trays: trays.collider });
+    pileItems.push({ name: `tins ${i}`, y: 0, collider: p.collider, pieces: [...p.items.map((m) => [m, TIN]), ...p.held.map((m) => [m, RED])] });
+    pileItems.push({ name: `trays ${i}`, y: 0, collider: trays.collider, pieces: trays.items.map((m) => [m, TRAY]) });
   });
   // the red tins: drawn on their own (two instanced draw calls), three in the piles and three
   // more waiting, hidden, to be put in the cart
@@ -444,6 +490,6 @@ export async function build({ quality, yieldFrame }) {
     background: 0xb9aa90,
     far: 120,
     exposure: 1.0,
-    debug: { maze, stripFlicker: M.stripFlicker, strip: M.strip, get rowLevel() { return rowLevel; }, ROW_PERIOD, DIP_A, cart: { x: CX, z: CZ }, exit: { x: EXIT_X, z: EXIT_Z }, cellToWorld: (r, c) => [cx(c), cz(r)], game, redBodies },
+    debug: { maze, stripFlicker: M.stripFlicker, strip: M.strip, get rowLevel() { return rowLevel; }, ROW_PERIOD, DIP_A, cart: { x: CX, z: CZ }, exit: { x: EXIT_X, z: EXIT_Z }, cellToWorld: (r, c) => [cx(c), cz(r)], CELL, game, redBodies, pileItems },
   };
 }
