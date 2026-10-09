@@ -16,6 +16,7 @@ import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { createControls, EYE_HEIGHT } from './controls.js';
 import { disposeScene } from './build.js';
+import { createPlay } from './play.js';
 import * as sound from './sound.js';
 
 const SCENES = {
@@ -110,6 +111,9 @@ export function prepare(id, elements) {
     const r = getRenderer(elements.mount);
     const mod = await SCENES[id]();
     const built = await mod.build({ quality, yieldFrame, renderer: r });
+    // The HUD text a walk changes (ctx.setObjective / setArrive) goes on this walk's own
+    // copy, so a second lap through the game opens on the room's first words again.
+    built.meta = { ...built.meta, start: { ...built.meta.start } };
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(built.background || 0x000000);
     scene.fog = built.fog || null;
@@ -162,17 +166,65 @@ export async function start(id, elements, opts = {}) {
   if (rise) controls.setEyeOffset(rise.from);
 
   // HUD
-  const { objective, hint, joystick, readout } = elements;
+  const { objective, hint, joystick, readout, tally, use: useButton } = elements;
   objective.textContent = built.meta.objective;
   objective.classList.remove('near');
   if (readout) { readout.textContent = ''; readout.classList.remove('visible'); }
+  if (tally) { tally.textContent = ''; tally.classList.remove('visible', 'flash'); }
   // what a scene may do to the HUD and the walk from its update()
   const ctx = {
     setObjective(text) { built.meta.objective = text; if (!objective.classList.contains('near')) objective.textContent = text; },
     setArrive(text) { built.meta.arrive = text; if (objective.classList.contains('near')) objective.textContent = text; },
     setReadout(text) { if (!readout) return; readout.textContent = text || ''; readout.classList.toggle('visible', !!text); },
+    // the mini game's score line, under the readout. Nothing new is posted once the exit has
+    // begun; the same text again flashes the line, so a repeated miss still registers.
+    setTally(text) {
+      if (!tally || ctx.exiting) return;
+      if (text && text === tally.textContent) {
+        tally.classList.remove('flash');
+        void tally.offsetWidth;
+        tally.classList.add('flash');
+      }
+      tally.textContent = text || '';
+      tally.classList.toggle('visible', !!text);
+    },
+    exiting: false,
     sound, reduced, quality: q, controls,
   };
+
+  // The room's mini game: things to use. "use" is queued and handled inside the tick, so a
+  // test stepping the simulation sees exactly what a player would.
+  const play = built.interact && built.interact.length
+    ? createPlay(built.interact, { camera, button: useButton, touch: q.touch })
+    : null;
+  let pendingUse = false;
+  const requestUse = () => { if (play) pendingUse = true; };
+  controls.onUse(requestUse);
+  // A tap made while the other thumb holds the joystick gets no click from the browser, so a
+  // touch is taken on pointerup; the click that may follow a single-finger tap is then ignored.
+  let lastTouchUse = -Infinity;
+  const pressUse = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    requestUse();
+    // hand the keyboard back to the room, so Space does not press the button a second time
+    useButton.blur();
+    try { r.domElement.focus({ preventScroll: true }); } catch (_) { /* ignore */ }
+  };
+  const onUsePointerUp = (e) => {
+    if (e.pointerType !== 'touch' && e.pointerType !== 'pen') return;
+    lastTouchUse = performance.now();
+    pressUse(e);
+  };
+  const onUseButton = (e) => {
+    if (performance.now() - lastTouchUse < 600) { e.preventDefault(); return; }
+    pressUse(e);
+  };
+  if (useButton) {
+    useButton.classList.remove('visible');
+    useButton.addEventListener('pointerup', onUsePointerUp);
+    useButton.addEventListener('click', onUseButton);
+  }
   hint.textContent = q.touch
     ? 'LEFT THUMB TO WALK  ·  RIGHT THUMB TO LOOK'
     : 'W A S D  TO WALK  ·  MOUSE TO LOOK';
@@ -240,6 +292,9 @@ export async function start(id, elements, opts = {}) {
     controls.setEnabled(false);
     objective.classList.add('near');
     objective.textContent = built.meta.arrive;
+    if (play) play.hide();
+    pendingUse = false;
+    ctx.exiting = true;
     const from = camera.position.clone();
     const path = typeof built.exitPath === 'function' ? built.exitPath(from) : built.exitPath;
     const pts = [from, ...path];
@@ -269,6 +324,10 @@ export async function start(id, elements, opts = {}) {
       // an endless floor: the scene may wrap the player back onto its tile
       if (built.wrap && built.wrap(p)) controls.update(0);
       if (built.update) built.update(p, dt, camera, ctx);
+      if (play) {
+        play.update(p);
+        if (pendingUse) { pendingUse = false; play.use(ctx); play.update(p); }
+      }
       if (built.trigger && inBox(p, built.trigger)) beginExit();
       else if (built.nearGoal && inBox(p, built.nearGoal)) {
         if (!objective.classList.contains('near')) { objective.classList.add('near'); objective.textContent = built.meta.arrive; }
@@ -306,7 +365,9 @@ export async function start(id, elements, opts = {}) {
 
   function frame(now) {
     raf = requestAnimationFrame(frame);
-    const dt = Math.min(0.1, (now - last) / 1000);
+    // (a frame's timestamp can be earlier than the performance.now() the loop started from, after a
+    // long build: time never runs backward)
+    const dt = Math.max(0, Math.min(0.1, (now - last) / 1000));
     last = now;
     if (!simulate(dt)) return;
     r.render(scene, camera);
@@ -353,15 +414,29 @@ export async function start(id, elements, opts = {}) {
     joystick.classList.remove('visible');
     hint.classList.remove('visible');
     if (readout) readout.classList.remove('visible');
+    if (tally) tally.classList.remove('visible');
+    if (useButton) {
+      useButton.classList.remove('visible');
+      useButton.removeEventListener('pointerup', onUsePointerUp);
+      useButton.removeEventListener('click', onUseButton);
+    }
     scene.remove(camera);
     // Free the room. A revisit rebuilds it (the loop returns to the title card first).
     prepared.delete(id);
+    if (built.dispose) built.dispose();
     disposeScene(scene);
     fade.style.opacity = result === 'reached' ? '1' : '0';
     resolveWalk(result);
   }
 
-  current = { finish, step, sim, setLoop, controls, camera, built, scene, ctx, get state() { return state; } };
+  // Test hook: press "use" now (the next tick handles it, as for a key press).
+  function use() { requestUse(); return sim(1 / 60, 1); }
+
+  current = {
+    finish, step, sim, setLoop, use, controls, camera, built, scene, ctx,
+    get state() { return state; },
+    get target() { return play ? play.target : null; },
+  };
   controls.setEnabled(true);
   r.render(scene, camera);
   // fade up from black once the first frame is on the canvas

@@ -2,6 +2,9 @@
 // controls: WASD / arrows to walk, pointer lock or click-drag to look, and on a
 // phone a thumb joystick on the left of the screen with drag-to-look on the right.
 //
+// E / Space / Enter, or a click while the mouse is captured, is "use": the room's mini
+// game decides what that does (walk/play.js picks the thing in front of you).
+//
 // Collision is axis-aligned boxes rather than raycasts: everything in these rooms
 // is a box (walls, table, chairs, sideboard, doors), so a circle-vs-AABB slide is
 // cheap enough for a phone and never lets the player through a wall.
@@ -32,6 +35,7 @@ export function createControls(camera, domElement, { reducedMotion = false } = {
   let eyeOffset = 0;            // added to the camera height (waking up on the sofa)
   let moving = false;
   let lastPointerType = 'mouse';
+  let onUseFn = null;           // walk.js: the player pressed "use"
 
   const euler = new THREE.Euler(0, 0, 0, 'YXZ');
   const forward = new THREE.Vector3();
@@ -66,6 +70,11 @@ export function createControls(camera, domElement, { reducedMotion = false } = {
       case 'KeyS': case 'ArrowDown': keys.back = true; break;
       case 'KeyA': case 'ArrowLeft': keys.left = true; break;
       case 'KeyD': case 'ArrowRight': keys.right = true; break;
+      case 'KeyE': case 'Space': case 'Enter': case 'NumpadEnter':
+        // Space and Enter still press a focused button (SKIP, SOUND); E is never a button key
+        if (e.code !== 'KeyE' && e.target !== domElement && e.target.closest && e.target.closest('button, a, [role="button"]')) return;
+        if (!e.repeat && onUseFn) onUseFn();
+        break;
       default: return;
     }
     e.preventDefault();
@@ -86,6 +95,7 @@ export function createControls(camera, domElement, { reducedMotion = false } = {
   function onPointerDown(e) {
     lastPointerType = e.pointerType || 'mouse';
     if (!enabled || e.pointerType === 'touch' || e.button !== 0) return;
+    if (pointerLocked && onUseFn) onUseFn();
     dragLooking = !pointerLocked;
     if (!pointerLocked) requestLock();
   }
@@ -220,9 +230,11 @@ export function createControls(camera, domElement, { reducedMotion = false } = {
   function getLook() { return { yaw, pitch }; }
   function setKeys(next = {}) { Object.assign(keys, { forward: !!next.forward, back: !!next.back, left: !!next.left, right: !!next.right }); }
   function onJoystick(fn) { touch.onJoystick = fn; }
+  function onUse(fn) { onUseFn = fn; }
 
   function dispose() {
     setEnabled(false);
+    onUseFn = null;
     domElement.removeEventListener('pointerdown', onPointerDown);
     domElement.removeEventListener('pointerdown', onTouchDown);
     domElement.removeEventListener('pointermove', onTouchMove);
@@ -237,6 +249,6 @@ export function createControls(camera, domElement, { reducedMotion = false } = {
 
   return {
     update, setPosition, position, setLook, getLook, lookAt, rotateBy, setColliders, setEnabled,
-    isMoving, setKeys, onJoystick, dispose, EYE_HEIGHT, setBobScale, setEyeOffset,
+    isMoving, setKeys, onJoystick, onUse, dispose, EYE_HEIGHT, setBobScale, setEyeOffset,
   };
 }

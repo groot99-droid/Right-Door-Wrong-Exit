@@ -155,11 +155,12 @@ export function repeat(group, matrices) {
 // A wet floor for a phone: the room drawn again upside down under a glossy, slightly
 // transparent floor. One extra draw call per material, no render target, and it keeps the
 // fog, tone mapping and lights of the real room (three.js flips the winding for the
-// negative scale). Only meshes are cloned; geometry and materials are shared.
+// negative scale). Only plain meshes are cloned; geometry and materials are shared. An
+// InstancedMesh is skipped: cloned as a plain mesh it would be one stray copy at the origin.
 export function mirrorY(group, floorY = 0) {
   const m = new THREE.Group();
   for (const child of group.children) {
-    if (!child.isMesh) continue;
+    if (!child.isMesh || child.isInstancedMesh) continue;
     const c = new THREE.Mesh(child.geometry, child.material);
     c.matrixAutoUpdate = false;
     c.matrix.copy(child.matrix);

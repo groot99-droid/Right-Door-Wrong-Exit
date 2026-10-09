@@ -26,6 +26,8 @@
     <div class="walk-mount" id="walkMount"></div>
     <div class="walk-objective" id="walkObjective"></div>
     <div class="walk-readout" id="walkReadout"></div>
+    <div class="walk-tally" id="walkTally"></div>
+    <button class="walk-use" id="walkUse" type="button" tabindex="-1"></button>
     <div class="walk-hint" id="walkHint"></div>
     <div class="walk-joystick" id="walkJoystick" aria-hidden="true"><div class="knob"></div></div>
     <div class="walk-fade" id="walkFade"></div>
@@ -39,6 +41,7 @@
     mount: document.getElementById('walkMount'), objective: document.getElementById('walkObjective'),
     hint: document.getElementById('walkHint'), joystick: document.getElementById('walkJoystick'),
     readout: document.getElementById('walkReadout'), fade: document.getElementById('walkFade'),
+    tally: document.getElementById('walkTally'), use: document.getElementById('walkUse'),
   };
   const status = document.getElementById('status');
   const mod = await import('../walk/walk.js');
