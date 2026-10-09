@@ -365,7 +365,9 @@ export async function start(id, elements, opts = {}) {
 
   function frame(now) {
     raf = requestAnimationFrame(frame);
-    const dt = Math.min(0.1, (now - last) / 1000);
+    // (a frame's timestamp can be earlier than the performance.now() the loop started from, after a
+    // long build: time never runs backward)
+    const dt = Math.max(0, Math.min(0.1, (now - last) / 1000));
     last = now;
     if (!simulate(dt)) return;
     r.render(scene, camera);
