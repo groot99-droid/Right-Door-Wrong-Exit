@@ -567,16 +567,19 @@ async function enterWalk(page, base, chapter) {
   await page.click('#nextBtn');
   await page.waitForSelector('body.phase-walk', { timeout: 15000 });
   // (waitForFunction does not await an async predicate: its promise counts as true at once, so the
-  // wait runs in the page instead)
-  await page.evaluate(async () => {
+  // wait runs in the page instead). The eye height is read the moment the walk starts: a scene that
+  // wakes you up low (teal2) rises in real time, so a later reading depends on the runner's speed.
+  walkStartY = await page.evaluate(async () => {
     const m = await import('./walk/walk.js'), t = performance.now();
     while (!(m.debug.current && m.debug.current.state === 'walk')) {
       if (performance.now() - t > 120000) throw new Error('the walk never started');
       await new Promise((r) => setTimeout(r, 50));
     }
+    return m.debug.current.camera.position.y;
   });
   await page.waitForTimeout(800);
 }
+let walkStartY = null;
 
 // After the exit: the next loading clip, or the title card after the last room.
 async function expectAfter(page, next) {
@@ -776,7 +779,7 @@ const CHAPTERS = {
   D: { scene: 'teal2', next: 'e.MP4', async drive(page) {
     const i0 = await page.evaluate(W.info);
     check('teal2 draw calls under 30', i0.calls < 30, `${i0.calls} calls, ${i0.tris} tris`);
-    const y0 = await page.evaluate(async () => (await import('./walk/walk.js')).debug.current.camera.position.y);
+    const y0 = walkStartY;
     check('you wake up low beside the sofa', y0 < 1.5, `camera y ${y0.toFixed(2)}`);
     await shot(page, 'teal2_wake');
     await page.evaluate(W.walk, ['forward', 100]);
