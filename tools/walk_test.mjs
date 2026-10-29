@@ -552,7 +552,11 @@ async function shot(page, name) {
 
 // Open the game on a chapter, get into its walk scene.
 async function enterWalk(page, base, chapter) {
-  await page.goto(`${base}/index.html?chapter=${chapter}`, { waitUntil: 'load' });
+  // The gate is all the next step needs. A room's second visit navigates while the first visit's
+  // next clip is still loading, and on a slow runner the page's `load` (the 5.9 MB title card,
+  // the clips) can take longer than the 30 s default, so wait for the DOM, with the same ceiling
+  // as the other software-GL waits.
+  await page.goto(`${base}/index.html?chapter=${chapter}`, { waitUntil: 'domcontentloaded', timeout: 120000 });
   await page.click('#gate');
   await page.waitForTimeout(300);
   await page.click('#startBtn');
