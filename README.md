@@ -176,9 +176,10 @@ or dawdle (`cycle()` and the hash-driven `stutter()` in `walk/build.js` keep it 
 | `trampoline` | the LED lattice pulses and flickers | the LEDs breathe on a 2.3 s sine with a hash-driven stutter; the panel lights follow |
 | `grocery` | the tube rows breathe, with a hard dip and a smaller one | all rows breathe; twice a 9 s loop the store dips (the left row still flickers on its own) |
 
-A chapter names its scene with `walk: '<id>'` in `CHAPTERS`; `walk/walk.js` maps ids to
+Each room is one file: `walk/walk.js` registers the rooms in chapter order and maps ids to
 `walk/scenes/<id>.js`. A scene module exports `meta` (objective, arrival prompt, start position,
-optionally `riseFrom` to wake up low) and `build({ quality, yieldFrame })`, which returns the
+optionally `riseFrom` to wake up low, and `chapter`: its letter, title, epithet, track, loading clip,
+room video, caption tilt, caption, stamp and log entry) and `build({ quality, yieldFrame })`, which returns the
 batched geometry group, the lights, the AABB colliders, the walkable bounds, the trigger and
 near-goal boxes, the exit camera path (an array, or a function of where the player is), the
 exit's duration / easing / fade / shake, fog and exposure, and optionally `update(pos, dt,
@@ -261,8 +262,9 @@ Playwright and Chromium are found at their usual global locations (`CHROMIUM=` o
   panel, and the import map for three.js.
 - `styles.css` — screen layout, glitch and flicker animations, typewriter card, log panel, walk HUD
   (objective, readout, tally, use prompt, hint, joystick, fade).
-- `script.js` — the `CHAPTERS` array (captions, log entries, titles, filenames, walk scene ids)
-  and the state machine that drives home → load → glitch → room → next → walk → load.
+- `script.js` — the state machine that drives home → load → glitch → room → next → walk → load,
+  over the chapters it loads from the scene files at startup (`walk.js` `chapters()`; START waits
+  for them).
 - `walk/walk.js` — the walk runtime: renderer, scene registry, prepare/start/skip, adaptive
   resolution, the exit animation, the scene context. `walk/controls.js` (movement, look, touch,
   head bob, the use key), `walk/build.js` (materials, batching, instancing, the mirrored floor,

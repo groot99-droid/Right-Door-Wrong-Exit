@@ -23,6 +23,19 @@ export const meta = {
   objective: 'REACH THE RED DOOR',
   arrive: 'ALMOST THERE',
   start: { x: 1.2, z: 0, yaw: -Math.PI / 2 },
+  // this room's chapter: what script.js shows around the walk (see walk.js chapters())
+  chapter: {
+    id: 'E',
+    room: 'Flooded Corridor',
+    epithet: 'The Decay',
+    audio: 'E.mp3',
+    load: 'e.MP4',
+    video: 'E.mp4',
+    rot: '-1.5deg',
+    caption: 'The deeper I go, the more the illusion falls apart. They painted a sky on the wall to make us forget we’re buried. The water is freezing. Whatever is running this place is starting to break down.',
+    stamp: 'ERR_CLOCK_NOT_FOUND',
+    log: 'I broke through. It’s dark, and everything is wet. The water dripping from the ceiling doesn’t splash—it hits the ground as perfect, square blue blocks before melting into puddles. The environment is failing. I tried to walk across a grate but the metal felt soft. The whole corridor is groaning.',
+  },
 };
 
 const LEN = 34, WID = 3.2, HGT = 2.9, RAIL_Y = 0.95, DADO = 1.25;

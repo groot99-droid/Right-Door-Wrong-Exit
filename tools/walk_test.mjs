@@ -1088,6 +1088,19 @@ async function main() {
   page.on('console', (m) => { if (m.type() === 'error') report.errors.push(`${m.type()}: ${m.text()}`); });
   page.on('pageerror', (e) => report.errors.push(String(e)));
 
+  // The chapters come from the rooms' scene files (meta.chapter, through walk.js chapters()):
+  // seven, A to G in order, each on the scene this test drives, with its clips and track on disk.
+  await page.goto(`${base}/index.html`, { waitUntil: 'domcontentloaded', timeout: 120000 });
+  const list = await page.evaluate(async () => (await import('./walk/walk.js')).chapters());
+  check('the chapters load from the scene files, A to G', list.map((c) => c.id).join('') === Object.keys(CHAPTERS).join(''), list.map((c) => c.id).join(''));
+  for (const c of list) {
+    const want = CHAPTERS[c.id];
+    const missing = ['room', 'epithet', 'audio', 'load', 'video', 'rot', 'caption', 'stamp', 'log'].filter((k) => !c[k]);
+    check(`chapter ${c.id}: walk ${c.walk}, every field set`, want && want.scene === c.walk && !missing.length, missing.join(', '));
+    const absent = [c.load, c.video, c.audio].filter((f) => f && !fs.existsSync(path.join(ROOT, f)));
+    check(`chapter ${c.id}: ${c.load}, ${c.video} and ${c.audio} exist`, !absent.length, absent.join(', '));
+  }
+
   const ids = Object.keys(CHAPTERS).filter((id) => !opt.scenes || opt.scenes.includes(id) || opt.scenes.includes(CHAPTERS[id].scene));
   for (const id of ids) {
     const ch = CHAPTERS[id];

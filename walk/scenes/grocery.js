@@ -21,6 +21,19 @@ export const meta = {
   objective: 'FIND THE EXIT',
   arrive: 'EXIT',
   start: { x: 0, z: 0, yaw: 0 },  // filled in from the maze below
+  // this room's chapter: what script.js shows around the walk (see walk.js chapters())
+  chapter: {
+    id: 'G',
+    room: 'Grocery Store',
+    epithet: 'The Anomaly',
+    audio: 'G.mp3',
+    load: 'g.MP4',
+    video: 'G.mp4',
+    rot: '-1.7deg',
+    caption: 'A grocery store, completely stripped. But right in the middle... a monument. Who roped off the cart? Am I following someone, or is the room trying to show me something?',
+    stamp: 'PING_DETECTED_0x8F',
+    log: 'Wait. Something changed. I heard a noise—a digital chime. I looked up and there is a single, bright red glow on the horizon. Out here? It’s an anomaly. It’s the only thing that isn’t supposed to be here. I’m heading for it.',
+  },
 };
 
 const CELL = 2.0;

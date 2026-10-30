@@ -22,6 +22,19 @@ export const meta = {
   arrive: 'GO UP',
   // where the player stands and looks at the start
   start: { x: 0.25, z: 2.35, yaw: 0.04 },
+  // this room's chapter: what script.js shows around the walk (see walk.js chapters())
+  chapter: {
+    id: 'A',
+    room: 'The Dining Room',
+    epithet: 'The Anchor',
+    audio: 'A.mp3',
+    load: 'a.MP4',
+    video: 'A.mp4',
+    rot: '-1.2deg',
+    caption: 'They said to wait in the dining room, but the house feels quiet. Too quiet. I don’t remember those stairs being so steep, or so dark. I think I have to go up.',
+    stamp: '14:32',
+    log: 'I shouldn’t have come down here. The carpet on these stairs smells like old ozone and dust, but I’ve been walking for what feels like hours. I look up, and the top of the stairwell is gone. It just loops. I have to keep going. There’s no other way.',
+  },
 };
 
 const ROOM = { w: 5.4, d: 6.4, h: 2.45 };            // x: ±2.7, z: ±3.2
