@@ -15,6 +15,19 @@ export const meta = {
   objective: 'FIND SOMEWHERE TO REST',
   arrive: 'CLOSE YOUR EYES',
   start: { x: 0.35, z: 2.7, yaw: 0.02 },
+  // this room's chapter: what script.js shows around the walk (see walk.js chapters())
+  chapter: {
+    id: 'C',
+    room: 'Teal Room, Square Door',
+    epithet: 'The Glitch',
+    audio: 'C.mp3',
+    load: 'c.MP4',
+    video: 'C.mp4',
+    rot: '-0.8deg',
+    caption: 'Found a place to rest, but it doesn’t feel real. The air is entirely still. There’s no dust. That doorway... it doesn’t reflect any light. It just swallows it.',
+    stamp: '27:81',
+    log: 'Found a teal room. The time on my watch doesn’t make sense anymore. The second hand is ticking backward, but the sun outside the fake window never moves. I found an orange couch. I’m going to close my eyes. Just for a minute.',
+  },
 };
 
 const ROOM = { w: 5.2, d: 7.4, h: 2.5 }; // x: ±2.6, z: ±3.7

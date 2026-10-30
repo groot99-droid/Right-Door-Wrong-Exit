@@ -15,6 +15,19 @@ export const meta = {
   objective: 'WALK TO THE END',
   arrive: 'GO DOWN',
   start: { x: -2.1, z: 0, yaw: -Math.PI / 2, pitch: 0.04 }, // on the landing, looking up the flight (+x)
+  // this room's chapter: what script.js shows around the walk (see walk.js chapters())
+  chapter: {
+    id: 'B',
+    room: 'The Hallway',
+    epithet: 'The Descent',
+    audio: 'B.mp3',
+    load: 'b.MP4',
+    video: 'B.mp4',
+    rot: '1.1deg',
+    caption: 'The stairs didn’t lead to the second floor. I’ve been walking down this hall for what feels like hours. The hum of the lights is getting louder. I just need to find a door.',
+    stamp: '18:15',
+    log: 'Found a hallway. The doors don’t feel right. I touched the wood on one of them and my hand tingled, like static electricity. For a second, the grain on the wood just... disappeared into gray lines. I’m so tired. I just need to find a room to catch my breath.',
+  },
 };
 
 const LEN = 36;                       // x of the end wall: the corridor floor is y = 0 from the top step to here

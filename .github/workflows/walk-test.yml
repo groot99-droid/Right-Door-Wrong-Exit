@@ -1,0 +1,43 @@
+# Runs the browser walk test (tools/walk_test.mjs) on every push and pull request:
+# the real page in headless Chromium with software WebGL, every chapter from the gate
+# to the next loading clip, desktop and phone (--mobile). Screenshots and report.json
+# are kept as an artifact for each run.
+#
+# Headless Chromium has no H.264 decoder, so the loading clips error out and the
+# loader moves on by itself: the loading screens' timing is not covered here.
+name: walk test
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  walk:
+    name: walk test (${{ matrix.viewport }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        viewport: [desktop, mobile]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Playwright and Chromium
+        run: |
+          npm install --no-save --no-package-lock playwright@1.63.0
+          npx playwright install --with-deps chromium
+      - name: Walk every chapter
+        run: node tools/walk_test.mjs ${{ matrix.viewport == 'mobile' && '--mobile' || '' }}
+      - name: Keep the screenshots and report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: walk-test-${{ matrix.viewport }}
+          path: tools/out/
+          if-no-files-found: ignore

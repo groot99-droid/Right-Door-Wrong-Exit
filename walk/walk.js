@@ -7,6 +7,7 @@
 // the device instead of downloaded, and a pixel ratio that adapts to the frame rate.
 //
 // Public API (script.js dynamic-imports this module):
+//   chapters()                         -> Promise<[chapter]>: each room's meta.chapter, in SCENES order, with `walk` set
 //   hasScene(id)                       -> whether a chapter has a walk scene
 //   prepare(id, elements)              -> builds the scene off-screen (call while the room video plays)
 //   start(id, elements, opts)          -> Promise<'reached' | 'skipped' | 'cancelled'>
@@ -32,6 +33,17 @@ const SCENES = {
 export function setSound(on) { sound.setEnabled(on); }
 
 export function hasScene(id) { return !!SCENES[id]; }
+
+// The chapters, one per room, in the order SCENES registers the rooms. Each scene file holds its
+// own chapter (meta.chapter: clips, track, caption, stamp, log) next to its objective.
+export async function chapters() {
+  const ids = Object.keys(SCENES);
+  const mods = await Promise.all(ids.map((id) => SCENES[id]()));
+  return mods.map((m, i) => {
+    if (!m.meta || m.meta.id !== ids[i] || !m.meta.chapter) throw new Error(`walk/scenes/${ids[i]}.js: no meta.chapter`);
+    return { ...m.meta.chapter, walk: ids[i] };
+  });
+}
 
 // --- device quality tier ---------------------------------------------------------------
 function detectQuality() {

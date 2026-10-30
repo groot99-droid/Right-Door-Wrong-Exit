@@ -17,6 +17,19 @@ export const meta = {
   arrive: 'GO THROUGH',
   start: { x: -0.55, z: 1.15, yaw: -0.62, pitch: 0.05 },
   riseFrom: 0.72, // eyes at cushion height: you wake up on the floor beside the sofa
+  // this room's chapter: what script.js shows around the walk (see walk.js chapters())
+  chapter: {
+    id: 'D',
+    room: 'Teal Room, Arched Door',
+    epithet: 'The Mutation',
+    audio: 'D.mp3',
+    load: 'd.MP4',
+    video: 'D.MP4',
+    rot: '1.6deg',
+    caption: 'I closed my eyes for a second. The room is the same, but the door changed. The architecture is breathing. It’s shifting when I don’t look directly at it.',
+    stamp: 'SysTime: 88:88',
+    log: 'I woke up but the room is wrong. I peeled back some of the wallpaper. It’s not wood or brick underneath; it’s a green, glowing grid. The room wasn’t just sitting here while I slept—it rebuilt itself. The humming is getting louder. I have to get through that arched doorway before it finishes.',
+  },
 };
 
 const ROOM = { w: 3.8, d: 6.6, h: 2.6 }; // x: ±1.9, z: ±3.3

@@ -2,106 +2,14 @@
   'use strict';
 
   // ---------------------------------------------------------------------------
-  // Chapters. Each entry pairs a loading clip (lowercase file) with the room
-  // video it glitches into (uppercase file), plus its caption and log entry.
-  // Filenames are case-sensitive and intentionally match the uploaded assets.
-  // `walk` names the 3D scene (walk/scenes/<id>.js) the player has to cross
-  // after NEXT before the next loading screen plays; a chapter without one goes
-  // straight to the loader as before.
+  // Chapters. Each room's scene file (walk/scenes/<id>.js) holds its chapter
+  // in meta.chapter, next to its objective: the loading clip (lowercase file),
+  // the room video it glitches into (uppercase file), its track, caption, stamp
+  // and log entry. walk.js chapters() returns them in the order the rooms are
+  // registered there, each with `walk` naming its scene. They are loaded once,
+  // at startup (see chaptersReady); START waits for them.
   // ---------------------------------------------------------------------------
-  const CHAPTERS = [
-    {
-      id: 'A',
-      audio: 'A.mp3',
-      rot: '-1.2deg',
-      room: 'The Dining Room',
-      epithet: 'The Anchor',
-      load: 'a.MP4',
-      video: 'A.mp4',
-      walk: 'dining',
-      caption: 'They said to wait in the dining room, but the house feels quiet. Too quiet. I don’t remember those stairs being so steep, or so dark. I think I have to go up.',
-      stamp: '14:32',
-      log: 'I shouldn’t have come down here. The carpet on these stairs smells like old ozone and dust, but I’ve been walking for what feels like hours. I look up, and the top of the stairwell is gone. It just loops. I have to keep going. There’s no other way.'
-    },
-    {
-      id: 'B',
-      audio: 'B.mp3',
-      rot: '1.1deg',
-      room: 'The Hallway',
-      epithet: 'The Descent',
-      load: 'b.MP4',
-      video: 'B.mp4',
-      walk: 'hallway',
-      caption: 'The stairs didn’t lead to the second floor. I’ve been walking down this hall for what feels like hours. The hum of the lights is getting louder. I just need to find a door.',
-      stamp: '18:15',
-      log: 'Found a hallway. The doors don’t feel right. I touched the wood on one of them and my hand tingled, like static electricity. For a second, the grain on the wood just... disappeared into gray lines. I’m so tired. I just need to find a room to catch my breath.'
-    },
-    {
-      id: 'C',
-      audio: 'C.mp3',
-      rot: '-0.8deg',
-      room: 'Teal Room, Square Door',
-      epithet: 'The Glitch',
-      load: 'c.MP4',
-      video: 'C.mp4',
-      walk: 'teal',
-      caption: 'Found a place to rest, but it doesn’t feel real. The air is entirely still. There’s no dust. That doorway... it doesn’t reflect any light. It just swallows it.',
-      stamp: '27:81',
-      log: 'Found a teal room. The time on my watch doesn’t make sense anymore. The second hand is ticking backward, but the sun outside the fake window never moves. I found an orange couch. I’m going to close my eyes. Just for a minute.'
-    },
-    {
-      id: 'D',
-      audio: 'D.mp3',
-      rot: '1.6deg',
-      room: 'Teal Room, Arched Door',
-      epithet: 'The Mutation',
-      load: 'd.MP4',
-      video: 'D.MP4',
-      walk: 'teal2',
-      caption: 'I closed my eyes for a second. The room is the same, but the door changed. The architecture is breathing. It’s shifting when I don’t look directly at it.',
-      stamp: 'SysTime: 88:88',
-      log: 'I woke up but the room is wrong. I peeled back some of the wallpaper. It’s not wood or brick underneath; it’s a green, glowing grid. The room wasn’t just sitting here while I slept—it rebuilt itself. The humming is getting louder. I have to get through that arched doorway before it finishes.'
-    },
-    {
-      id: 'E',
-      audio: 'E.mp3',
-      rot: '-1.5deg',
-      room: 'Flooded Corridor',
-      epithet: 'The Decay',
-      load: 'e.MP4',
-      video: 'E.mp4',
-      walk: 'flooded',
-      caption: 'The deeper I go, the more the illusion falls apart. They painted a sky on the wall to make us forget we’re buried. The water is freezing. Whatever is running this place is starting to break down.',
-      stamp: 'ERR_CLOCK_NOT_FOUND',
-      log: 'I broke through. It’s dark, and everything is wet. The water dripping from the ceiling doesn’t splash—it hits the ground as perfect, square blue blocks before melting into puddles. The environment is failing. I tried to walk across a grate but the metal felt soft. The whole corridor is groaning.'
-    },
-    {
-      id: 'F',
-      audio: 'F.mp3',
-      rot: '0.9deg',
-      room: 'Trampoline Park',
-      epithet: 'The Macro-Structure',
-      load: 'f.MP4',
-      video: 'F.mp4',
-      walk: 'trampoline',
-      caption: 'I fell through a vent and landed here. It goes on forever. A playground for no one. The silence is so heavy it’s pressing against my eardrums. I have to keep moving.',
-      stamp: 'DISTANCE: NaN',
-      log: 'I didn’t hit the ground, I just... landed. I’m in a massive room covered in orange and black trampoline padding. No walls. No ceiling. The ground repeats. The exact same scuff mark passes under my feet every hundred steps. I am on a treadmill. The geometry is a sphere. I’m trapped in a loop.'
-    },
-    {
-      id: 'G',
-      audio: 'G.mp3',
-      rot: '-1.7deg',
-      room: 'Grocery Store',
-      epithet: 'The Anomaly',
-      load: 'g.MP4',
-      video: 'G.mp4',
-      walk: 'grocery',
-      caption: 'A grocery store, completely stripped. But right in the middle... a monument. Who roped off the cart? Am I following someone, or is the room trying to show me something?',
-      stamp: 'PING_DETECTED_0x8F',
-      log: 'Wait. Something changed. I heard a noise—a digital chime. I looked up and there is a single, bright red glow on the horizon. Out here? It’s an anomaly. It’s the only thing that isn’t supposed to be here. I’m heading for it.'
-    }
-  ];
+  let CHAPTERS = [];
 
   const HOME_AUDIO = '0.mp3';  // plays on the title card
   // A loading screen shows exactly LOAD_SECONDS of its clip, counted in playback
@@ -644,9 +552,27 @@
     });
   }
 
+  // The chapters live in the rooms' scene files, so they come in with the walk module. It
+  // starts loading now, while the title card is up; START waits for it. Without it (a
+  // browser that cannot load modules) there is nothing to play, and START says so.
+  const chaptersReady = loadWalk().then((mod) => {
+    if (!mod) throw new Error('walk module unavailable');
+    return mod.chapters();
+  }).then((list) => { CHAPTERS = list; return list; });
+  chaptersReady.catch((err) => {
+    console.warn('chapters unavailable:', err);
+    startBtn.disabled = true;
+    startBtn.querySelector('.start-btn-label').textContent = 'THIS BROWSER CANNOT OPEN THE ROOMS';
+  });
+
   // ?chapter=C makes START open on that room (used by tools/walk_test.mjs and for look-dev).
-  const jumpTo = CHAPTERS.findIndex((c) => c.id === String(new URLSearchParams(window.location.search).get('chapter') || '').toUpperCase());
-  startBtn.addEventListener('click', () => goToChapter(jumpTo >= 0 ? jumpTo : 0));
+  const jumpId = String(new URLSearchParams(window.location.search).get('chapter') || '').toUpperCase();
+  startBtn.addEventListener('click', () => {
+    chaptersReady.then(() => {
+      const jumpTo = CHAPTERS.findIndex((c) => c.id === jumpId);
+      goToChapter(jumpTo >= 0 ? jumpTo : 0);
+    }, () => {});
+  });
 
   nextBtn.addEventListener('click', () => {
     if (busy) return;

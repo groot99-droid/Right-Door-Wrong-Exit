@@ -552,7 +552,11 @@ async function shot(page, name) {
 
 // Open the game on a chapter, get into its walk scene.
 async function enterWalk(page, base, chapter) {
-  await page.goto(`${base}/index.html?chapter=${chapter}`, { waitUntil: 'load' });
+  // The gate is all the next step needs. A room's second visit navigates while the first visit's
+  // next clip is still loading, and on a slow runner the page's `load` (the 5.9 MB title card,
+  // the clips) can take longer than the 30 s default, so wait for the DOM, with the same ceiling
+  // as the other software-GL waits.
+  await page.goto(`${base}/index.html?chapter=${chapter}`, { waitUntil: 'domcontentloaded', timeout: 120000 });
   await page.click('#gate');
   await page.waitForTimeout(300);
   await page.click('#startBtn');
@@ -563,16 +567,19 @@ async function enterWalk(page, base, chapter) {
   await page.click('#nextBtn');
   await page.waitForSelector('body.phase-walk', { timeout: 15000 });
   // (waitForFunction does not await an async predicate: its promise counts as true at once, so the
-  // wait runs in the page instead)
-  await page.evaluate(async () => {
+  // wait runs in the page instead). The eye height is read the moment the walk starts: a scene that
+  // wakes you up low (teal2) rises in real time, so a later reading depends on the runner's speed.
+  walkStartY = await page.evaluate(async () => {
     const m = await import('./walk/walk.js'), t = performance.now();
     while (!(m.debug.current && m.debug.current.state === 'walk')) {
       if (performance.now() - t > 120000) throw new Error('the walk never started');
       await new Promise((r) => setTimeout(r, 50));
     }
+    return m.debug.current.camera.position.y;
   });
   await page.waitForTimeout(800);
 }
+let walkStartY = null;
 
 // After the exit: the next loading clip, or the title card after the last room.
 async function expectAfter(page, next) {
@@ -772,7 +779,7 @@ const CHAPTERS = {
   D: { scene: 'teal2', next: 'e.MP4', async drive(page) {
     const i0 = await page.evaluate(W.info);
     check('teal2 draw calls under 30', i0.calls < 30, `${i0.calls} calls, ${i0.tris} tris`);
-    const y0 = await page.evaluate(async () => (await import('./walk/walk.js')).debug.current.camera.position.y);
+    const y0 = walkStartY;
     check('you wake up low beside the sofa', y0 < 1.5, `camera y ${y0.toFixed(2)}`);
     await shot(page, 'teal2_wake');
     await page.evaluate(W.walk, ['forward', 100]);
@@ -1080,6 +1087,19 @@ async function main() {
   const page = await context.newPage();
   page.on('console', (m) => { if (m.type() === 'error') report.errors.push(`${m.type()}: ${m.text()}`); });
   page.on('pageerror', (e) => report.errors.push(String(e)));
+
+  // The chapters come from the rooms' scene files (meta.chapter, through walk.js chapters()):
+  // seven, A to G in order, each on the scene this test drives, with its clips and track on disk.
+  await page.goto(`${base}/index.html`, { waitUntil: 'domcontentloaded', timeout: 120000 });
+  const list = await page.evaluate(async () => (await import('./walk/walk.js')).chapters());
+  check('the chapters load from the scene files, A to G', list.map((c) => c.id).join('') === Object.keys(CHAPTERS).join(''), list.map((c) => c.id).join(''));
+  for (const c of list) {
+    const want = CHAPTERS[c.id];
+    const missing = ['room', 'epithet', 'audio', 'load', 'video', 'rot', 'caption', 'stamp', 'log'].filter((k) => !c[k]);
+    check(`chapter ${c.id}: walk ${c.walk}, every field set`, want && want.scene === c.walk && !missing.length, missing.join(', '));
+    const absent = [c.load, c.video, c.audio].filter((f) => f && !fs.existsSync(path.join(ROOT, f)));
+    check(`chapter ${c.id}: ${c.load}, ${c.video} and ${c.audio} exist`, !absent.length, absent.join(', '));
+  }
 
   const ids = Object.keys(CHAPTERS).filter((id) => !opt.scenes || opt.scenes.includes(id) || opt.scenes.includes(CHAPTERS[id].scene));
   for (const id of ids) {

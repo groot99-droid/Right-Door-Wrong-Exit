@@ -16,6 +16,19 @@ export const meta = {
   objective: 'KEEP MOVING',
   arrive: 'IT IS HERE',
   start: { x: 0.4, z: 2.2, yaw: 0.0 },
+  // this room's chapter: what script.js shows around the walk (see walk.js chapters())
+  chapter: {
+    id: 'F',
+    room: 'Trampoline Park',
+    epithet: 'The Macro-Structure',
+    audio: 'F.mp3',
+    load: 'f.MP4',
+    video: 'F.mp4',
+    rot: '0.9deg',
+    caption: 'I fell through a vent and landed here. It goes on forever. A playground for no one. The silence is so heavy it’s pressing against my eardrums. I have to keep moving.',
+    stamp: 'DISTANCE: NaN',
+    log: 'I didn’t hit the ground, I just... landed. I’m in a massive room covered in orange and black trampoline padding. No walls. No ceiling. The ground repeats. The exact same scuff mark passes under my feet every hundred steps. I am on a treadmill. The geometry is a sphere. I’m trapped in a loop.',
+  },
 };
 
 const BED_X = 1.6, BED_Z = 2.4, FRAME = 0.42;
