@@ -16,7 +16,7 @@ a vendored copy of [three.js](https://threejs.org/) r160 (MIT, `vendor/three/`) 
 ## The loop
 
 ```
-gate ──click──▶ 0.PNG (home) ──START──▶ a.MP4 (plays in full) ──glitch──▶ A.mp4 (room + caption)
+gate ──click──▶ 0.PNG (home) ──START──▶ a.MP4 (5 s of clip)  ──glitch──▶ A.mp4 (room + caption)
                               ▲                                              │
                               │                                            NEXT
                               │                                              ▼
@@ -307,7 +307,7 @@ Playwright and Chromium are found at their usual global locations (`CHROMIUM=` o
   the two aren't competing for the connection while the loading screen is what's on screen. The
   next room's loading clip is prefetched while you read the current room.
 - Each section owns one audio track. `0.mp3` runs under the home screen; a room's track starts
-  with its loading clip and keeps playing through the glitch and the room itself, so the four
+  with its loading clip and keeps playing through the glitch and the room itself, so the five
   seconds of loading and the room that follows are one continuous piece of sound.
 - The video clips are silent — muted in the markup and again in `script.js`, with nothing that
   ever unmutes them. The section track is the only sound. Muting them also keeps them from
